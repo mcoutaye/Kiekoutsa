@@ -1,135 +1,139 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import { useGame } from "@/contexts/GameContext";
-import { Eye, EyeOff, Copy, Check } from 'lucide-react';
+import { Crown, Settings, ChevronDown, ChevronUp, Users } from "lucide-react";
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      onClick={() => onChange(!checked)}
+      className={`relative w-10 h-5 rounded-full transition-colors ${checked ? "bg-purple-600" : "bg-gray-700"}`}
+    >
+      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${checked ? "left-5" : "left-0.5"}`} />
+    </button>
+  );
+}
 
 export default function Lobby() {
-  const { room, playerId, startSelection, error } = useGame();
-  
-  // États pour la visibilité et la copie
-  const [isRevealed, setIsRevealed] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { room, playerId, startSelection, setSettings, error } = useGame();
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   if (!room) return null;
-
   const me = room.players.find((p) => p.id === playerId);
   const isHost = me?.isHost ?? false;
   const canStart = room.players.length >= 3;
-
-  // Fonction pour copier le code
-  const handleCopy = () => {
-    if (room.code) {
-      navigator.clipboard.writeText(room.code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000); // Reset l'icône après 2s
-    }
-  };
+  const s = room.settings;
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6">
-      {/* Room code section */}
-      <div className="mb-10 text-center">
-        <p className="text-gray-400 text-sm mb-2 uppercase tracking-widest">
-          Code du salon
-        </p>
-
-        <div className="relative group max-w-xs mx-auto flex items-center justify-center">
-          {/* Container du code */}
-          <div
-            className={`text-6xl font-black font-mono tracking-widest text-white px-8 py-6 rounded-2xl transition-all duration-300 border-2 ${
-              isRevealed ? 'border-purple-600' : 'border-gray-700'
-            }`}
-            style={{ background: "var(--surface)" }}
-          >
-            <span className={`transition-all duration-500 ${!isRevealed ? 'blur-xl select-none' : 'blur-0'}`}>
-              {room.code}
-            </span>
-          </div>
-
-          {/* Boutons d'actions à droite */}
-          <div className="absolute -right-14 top-1/2 -translate-y-1/2 flex flex-col gap-3">
-            {/* Bouton Voir/Cacher */}
-            <button
-              onClick={() => setIsRevealed(!isRevealed)}
-              className="p-2 bg-gray-800 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white transition-colors border border-gray-700"
-              title={isRevealed ? "Cacher" : "Afficher"}
-            >
-              {isRevealed ? <EyeOff size={20} /> : <Eye size={20} />}
-            </button>
-
-            {/* Bouton Copier */}
-            <button
-              onClick={handleCopy}
-              className="p-2 bg-gray-800 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white transition-colors border border-gray-700"
-              title="Copier le code"
-            >
-              {copied ? <Check size={20} className="text-green-400" /> : <Copy size={20} />}
-            </button>
-          </div>
+    <div className="flex-1 flex flex-col items-center justify-center p-6 gap-6 max-w-sm mx-auto w-full">
+      {/* Players */}
+      <div className="w-full">
+        <div className="flex items-center gap-2 mb-3">
+          <Users size={14} className="text-gray-500" />
+          <h2 className="text-xs font-medium text-gray-400 uppercase tracking-widest">
+            Joueurs ({room.players.length}/10)
+          </h2>
         </div>
-
-        <p className={`text-sm mt-4 transition-colors ${copied ? "text-green-400 font-medium" : "text-gray-500"}`}>
-          {copied ? "Code copié !" : "Partage ce code à tes amis"}
-        </p>
-      </div>
-
-      {/* Players List */}
-      <div className="w-full max-w-sm mb-8">
-        <h2 className="text-sm font-medium text-gray-400 uppercase tracking-widest mb-4 text-center">
-          Joueurs ({room.players.length})
-        </h2>
-        <div className="space-y-3">
+        <div className="space-y-2">
           {room.players.map((p) => (
-            <div
-              key={p.id}
-              className="flex items-center gap-3 px-4 py-3 rounded-xl"
-              style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-            >
-              <div className="w-9 h-9 rounded-full bg-purple-700 flex items-center justify-center font-bold text-white uppercase">
-                {p.name[0]}
+            <div key={p.id} className="flex items-center gap-3 px-4 py-2.5 rounded-xl"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+              <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-gray-800">
+                {p.avatar ? (
+                  <img src={p.avatar} alt={p.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-sm font-bold text-white uppercase">
+                    {p.name[0]}
+                  </div>
+                )}
               </div>
-              <span className="flex-1 font-medium text-white">{p.name}</span>
-              {p.isHost && (
-                <span className="text-xs px-2 py-0.5 rounded-md bg-yellow-900/40 text-yellow-400 border border-yellow-700/50">
-                  Host
-                </span>
-              )}
-              {p.id === playerId && (
-                <span className="text-xs text-gray-500">(toi)</span>
-              )}
+              <span className="flex-1 font-medium text-white text-sm">{p.name}</span>
+              {p.isHost && <Crown size={14} className="text-yellow-400 flex-shrink-0" />}
+              {p.id === playerId && <span className="text-xs text-gray-500">(toi)</span>}
             </div>
           ))}
         </div>
-
         {room.players.length < 3 && (
-          <p className="text-center text-gray-500 text-sm mt-4">
-            Besoin d&apos;au moins 3 joueurs pour lancer…
+          <p className="text-center text-gray-500 text-xs mt-3">
+            Besoin de {3 - room.players.length} joueur{3 - room.players.length > 1 ? "s" : ""} de plus…
           </p>
         )}
       </div>
 
+      {/* Host settings */}
+      {isHost && (
+        <div className="w-full rounded-2xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
+          <button
+            onClick={() => setSettingsOpen((o) => !o)}
+            className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-300 hover:text-white transition-colors"
+            style={{ background: "var(--surface)" }}
+          >
+            <div className="flex items-center gap-2">
+              <Settings size={14} />
+              Paramètres de la partie
+            </div>
+            {settingsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+
+          {settingsOpen && (
+            <div className="px-4 pb-4 pt-2 space-y-4" style={{ background: "var(--surface)" }}>
+              {/* Track range */}
+              <div>
+                <p className="text-xs font-medium text-gray-400 mb-2">
+                  Musiques par joueur : {s.minTracks} – {s.maxTracks}
+                </p>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <label className="text-xs text-gray-500">Min</label>
+                    <input type="range" min={1} max={5} value={s.minTracks}
+                      onChange={(e) => setSettings({ minTracks: Number(e.target.value) })}
+                      className="w-full accent-purple-500" />
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-xs text-gray-500">Max</label>
+                    <input type="range" min={s.minTracks} max={10} value={s.maxTracks}
+                      onChange={(e) => setSettings({ maxTracks: Number(e.target.value) })}
+                      className="w-full accent-purple-500" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Toggles */}
+              {[
+                { key: "autoReveal", label: "Révéler auto quand tout le monde a voté" },
+                { key: "autoPlay", label: "Lancer la musique automatiquement" },
+                { key: "allowSelfVote", label: "Voter pour soi-même" },
+                { key: "anonymousVotes", label: "Votes anonymes (cache qui a voté pour qui)" },
+              ].map(({ key, label }) => (
+                <div key={key} className="flex items-center justify-between gap-3">
+                  <span className="text-xs text-gray-300">{label}</span>
+                  <Toggle
+                    checked={s[key as keyof typeof s] as boolean}
+                    onChange={(v) => setSettings({ [key]: v })}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {error && (
-        <div className="mb-4 px-4 py-3 rounded-xl bg-red-900/30 border border-red-700 text-red-300 text-sm">
+        <div className="w-full px-4 py-3 rounded-xl bg-red-900/30 border border-red-700 text-red-300 text-sm">
           {error}
         </div>
       )}
 
-      {/* Host start button */}
       {isHost ? (
-        <button
-          onClick={startSelection}
-          disabled={!canStart}
-          className="px-10 py-4 rounded-xl font-bold text-lg transition-all
-            bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed
-            active:scale-95 text-white shadow-lg shadow-purple-900/20"
-        >
+        <button onClick={startSelection} disabled={!canStart}
+          className="w-full py-4 rounded-xl font-bold text-lg transition-all bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 text-white">
           Lancer la sélection
         </button>
       ) : (
         <div className="flex items-center gap-2 text-gray-500">
           <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />
-          <p className="text-sm italic">En attente du host…</p>
+          <p className="text-sm">En attente du host…</p>
         </div>
       )}
     </div>

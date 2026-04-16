@@ -4,18 +4,32 @@ import React, {
   createContext, useContext, useEffect, useState,
   useCallback, useRef, ReactNode,
 } from "react";
-import { io, Socket } from "socket.io-client";
+import { supabase } from "@/lib/supabase";
+import { sanitizeRoom } from "@/lib/room-utils";
+import type { RoomDB } from "@/lib/room-utils";
 import type { ClientRoom, PlaybackMode, Track, RoomSettings } from "@/types/game";
 
+// ─── Client ID (persists for session) ──────────────────────────────────────
+function getClientId(): string {
+  if (typeof window === "undefined") return "";
+  let id = sessionStorage.getItem("kiekoutsa_client_id");
+  if (!id) {
+    id = crypto.randomUUID();
+    sessionStorage.setItem("kiekoutsa_client_id", id);
+  }
+  return id;
+}
+
+// ─── Context interface ───────────────────────────────────────────────────────
 interface GameContextType {
-  socket: Socket | null;
   room: ClientRoom | null;
-  playerId: string | null;
+  playerId: string;
+  roomCode: string | null;
   error: string | null;
-  audioSignal: number; // increments when host triggers audio start
+  audioSignal: number;
   clearError: () => void;
-  createRoom: (playerName: string, avatar: string) => void;
-  joinRoom: (roomCode: string, playerName: string, avatar: string) => void;
+  createRoom: (playerName: string, avatar: string) => Promise<string | null>;
+  joinRoom: (roomCode: string, playerName: string, avatar: string) => Promise<string | null>;
   addTrack: (track: Omit<Track, "addedBy">) => void;
   removeTrack: (trackId: string) => void;
   setReady: (ready: boolean) => void;
@@ -25,6 +39,7 @@ interface GameContextType {
   setSettings: (settings: Partial<RoomSettings>) => void;
   startGame: () => void;
   hostStartMusic: () => void;
+  transitionToVoting: () => void;
   castVote: (suspectedPlayerId: string) => void;
   forceReveal: () => void;
   nextRound: () => void;
@@ -33,68 +48,122 @@ interface GameContextType {
 
 const GameContext = createContext<GameContextType | null>(null);
 
-let globalSocket: Socket | null = null;
-function getSocket(): Socket {
-  if (!globalSocket) globalSocket = io({ reconnectionAttempts: 5 });
-  return globalSocket;
-}
-
 export function GameProvider({ children }: { children: ReactNode }) {
   const [room, setRoom] = useState<ClientRoom | null>(null);
-  const [playerId, setPlayerId] = useState<string | null>(null);
+  const [roomCode, setRoomCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [audioSignal, setAudioSignal] = useState(0);
-  const socketRef = useRef<Socket | null>(null);
+  const playerId = useRef(getClientId()).current;
+  const prevPlayingStartedAt = useRef<string | null>(null);
 
+  // ── Subscribe to Supabase Realtime ─────────────────────────────────────
   useEffect(() => {
-    const s = getSocket();
-    socketRef.current = s;
+    if (!roomCode) return;
 
-    const onConnect = () => setPlayerId(s.id ?? null);
-    const onRoomUpdated = ({ room }: { room: ClientRoom }) => setRoom(room);
-    const onError = ({ message }: { message: string }) => setError(message);
-    const onStartAudio = () => setAudioSignal((n) => n + 1);
+    // Initial fetch
+    fetch(`/api/rooms/${roomCode}?playerId=${encodeURIComponent(playerId)}`)
+      .then((r) => r.json())
+      .then(({ room: r }) => { if (r) setRoom(r); });
 
-    s.on("connect", onConnect);
-    s.on("room-updated", onRoomUpdated);
-    s.on("error", onError);
-    s.on("start-audio", onStartAudio);
+    // Realtime subscription
+    const channel = supabase
+      .channel(`room:${roomCode}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "rooms", filter: `code=eq.${roomCode}` },
+        (payload) => {
+          const newRoom = payload.new as RoomDB;
+          const sanitized = sanitizeRoom(newRoom, playerId);
+          setRoom(sanitized);
 
-    if (s.connected) setPlayerId(s.id ?? null);
+          // Detect music start (playing_started_at set or changed)
+          if (
+            newRoom.playing_started_at &&
+            newRoom.playing_started_at !== prevPlayingStartedAt.current
+          ) {
+            prevPlayingStartedAt.current = newRoom.playing_started_at;
+            setAudioSignal((n) => n + 1);
+          }
+        }
+      )
+      .subscribe();
 
-    return () => {
-      s.off("connect", onConnect);
-      s.off("room-updated", onRoomUpdated);
-      s.off("error", onError);
-      s.off("start-audio", onStartAudio);
-    };
-  }, []);
+    return () => { supabase.removeChannel(channel); };
+  }, [roomCode, playerId]);
 
-  const emit = useCallback((event: string, data?: unknown) => socketRef.current?.emit(event, data), []);
+  // ── Action helper ───────────────────────────────────────────────────────
+  const action = useCallback(
+    async (type: string, payload?: unknown) => {
+      if (!roomCode) return;
+      const res = await fetch(`/api/rooms/${roomCode}/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: type, playerId, payload }),
+      });
+      const data = await res.json();
+      if (data.error) setError(data.error);
+    },
+    [roomCode, playerId]
+  );
 
-  const createRoom = useCallback((playerName: string, avatar: string) => emit("create-room", { playerName, avatar }), [emit]);
-  const joinRoom = useCallback((roomCode: string, playerName: string, avatar: string) => emit("join-room", { roomCode, playerName, avatar }), [emit]);
-  const addTrack = useCallback((track: Omit<Track, "addedBy">) => emit("add-track", track), [emit]);
-  const removeTrack = useCallback((trackId: string) => emit("remove-track", { trackId }), [emit]);
-  const setReady = useCallback((ready: boolean) => emit("set-ready", { ready }), [emit]);
-  const startSelection = useCallback(() => emit("start-selection"), [emit]);
-  const startModeSelection = useCallback(() => emit("start-mode-selection"), [emit]);
-  const setPlaybackMode = useCallback((mode: PlaybackMode) => emit("set-playback-mode", { mode }), [emit]);
-  const setSettings = useCallback((settings: Partial<RoomSettings>) => emit("set-settings", settings), [emit]);
-  const startGame = useCallback(() => emit("start-game"), [emit]);
-  const hostStartMusic = useCallback(() => emit("host-start-music"), [emit]);
-  const castVote = useCallback((suspectedPlayerId: string) => emit("cast-vote", { suspectedPlayerId }), [emit]);
-  const forceReveal = useCallback(() => emit("force-reveal"), [emit]);
-  const nextRound = useCallback(() => emit("next-round"), [emit]);
-  const playAgain = useCallback(() => emit("play-again"), [emit]);
+  // ── Create / Join ───────────────────────────────────────────────────────
+  const createRoom = useCallback(
+    async (playerName: string, avatar: string): Promise<string | null> => {
+      const res = await fetch("/api/rooms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playerName, avatar, playerId }),
+      });
+      const data = await res.json();
+      if (data.error) { setError(data.error); return null; }
+      setRoomCode(data.roomCode);
+      setRoom(data.room);
+      return data.roomCode;
+    },
+    [playerId]
+  );
+
+  const joinRoom = useCallback(
+    async (code: string, playerName: string, avatar: string): Promise<string | null> => {
+      const upper = code.toUpperCase().trim();
+      const res = await fetch(`/api/rooms/${upper}/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "join-room", playerId, payload: { playerName, avatar } }),
+      });
+      const data = await res.json();
+      if (data.error) { setError(data.error); return null; }
+      setRoomCode(upper);
+      setRoom(data.room);
+      return upper;
+    },
+    [playerId]
+  );
+
+  // ── Game actions ────────────────────────────────────────────────────────
+  const addTrack = useCallback((track: Omit<Track, "addedBy">) => action("add-track", track), [action]);
+  const removeTrack = useCallback((trackId: string) => action("remove-track", { trackId }), [action]);
+  const setReady = useCallback((ready: boolean) => action("set-ready", { ready }), [action]);
+  const startSelection = useCallback(() => action("start-selection"), [action]);
+  const startModeSelection = useCallback(() => action("start-mode-selection"), [action]);
+  const setPlaybackMode = useCallback((mode: PlaybackMode) => action("set-playback-mode", { mode }), [action]);
+  const setSettings = useCallback((settings: Partial<RoomSettings>) => action("set-settings", settings), [action]);
+  const startGame = useCallback(() => action("start-game"), [action]);
+  const hostStartMusic = useCallback(() => action("host-start-music"), [action]);
+  const transitionToVoting = useCallback(() => action("transition-to-voting"), [action]);
+  const castVote = useCallback((suspectedPlayerId: string) => action("cast-vote", { suspectedPlayerId }), [action]);
+  const forceReveal = useCallback(() => action("force-reveal"), [action]);
+  const nextRound = useCallback(() => action("next-round"), [action]);
+  const playAgain = useCallback(() => action("play-again"), [action]);
   const clearError = useCallback(() => setError(null), []);
 
   return (
     <GameContext.Provider value={{
-      socket: socketRef.current, room, playerId, error, audioSignal,
+      room, playerId, roomCode, error, audioSignal,
       clearError, createRoom, joinRoom, addTrack, removeTrack, setReady,
       startSelection, startModeSelection, setPlaybackMode, setSettings,
-      startGame, hostStartMusic, castVote, forceReveal, nextRound, playAgain,
+      startGame, hostStartMusic, transitionToVoting,
+      castVote, forceReveal, nextRound, playAgain,
     }}>
       {children}
     </GameContext.Provider>

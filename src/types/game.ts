@@ -10,12 +10,12 @@ export type GamePhase =
 export type PlaybackMode = "master" | "sync";
 
 export interface RoomSettings {
-  minTracks: number;      // 1–5, default 3
-  maxTracks: number;      // 3–10, default 5
-  autoReveal: boolean;    // révèle dès que tout le monde a voté
-  autoPlay: boolean;      // démarre la musique automatiquement
-  allowSelfVote: boolean; // peut voter pour soi-même
-  anonymousVotes: boolean;// cache qui a voté pour qui à la révélation
+  minTracks: number;
+  maxTracks: number;
+  autoReveal: boolean;
+  autoPlay: boolean;
+  allowSelfVote: boolean;
+  anonymousVotes: boolean;
 }
 
 export const DEFAULT_SETTINGS: RoomSettings = {
@@ -46,16 +46,6 @@ export interface ClientTrack {
   addedByName: string | null;
 }
 
-export interface Player {
-  id: string;
-  name: string;
-  avatar: string;
-  isHost: boolean;
-  isReady: boolean;
-  score: number;
-  tracks: Track[];
-}
-
 export interface ClientPlayer {
   id: string;
   name: string;
@@ -63,7 +53,6 @@ export interface ClientPlayer {
   isHost: boolean;
   isReady: boolean;
   score: number;
-  // trackCount intentionnellement absent
 }
 
 export interface VoteResult {
@@ -92,10 +81,11 @@ export interface ClientRoom {
   totalTracks: number;
   players: ClientPlayer[];
   myTracks: Track[];
-  votedPlayerIds: string[];     // qui a voté (pas ce qu'ils ont voté)
-  voteCounts: Record<string, number>; // combien de votes chaque joueur a reçu
+  votedPlayerIds: string[];
+  voteCounts: Record<string, number>;
   myVote: string | null;
   roundResults: RoundResult[];
+  playingStartedAt: string | null;
 }
 
 export interface SpotifyTrack {
