@@ -11,9 +11,13 @@ export function getSupabase(): SupabaseClient {
   return _client;
 }
 
-// Lazy proxy so existing `supabase.from(...)` calls still work
+// Lazy proxy so existing `supabase.from(...)` calls still work.
+// Methods are bound to the real client so `this` is correct.
 export const supabase = new Proxy({} as SupabaseClient, {
   get(_t, prop) {
-    return (getSupabase() as unknown as Record<string, unknown>)[prop as string];
+    const client = getSupabase();
+    const value = (client as unknown as Record<string, unknown>)[prop as string];
+    if (typeof value === "function") return (value as Function).bind(client);
+    return value;
   },
 });

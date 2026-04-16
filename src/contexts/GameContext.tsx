@@ -95,13 +95,22 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const action = useCallback(
     async (type: string, payload?: unknown) => {
       if (!roomCode) return;
-      const res = await fetch(`/api/rooms/${roomCode}/action`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: type, playerId, payload }),
-      });
-      const data = await res.json();
-      if (data.error) setError(data.error);
+      try {
+        const res = await fetch(`/api/rooms/${roomCode}/action`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: type, playerId, payload }),
+        });
+        const text = await res.text();
+        let data: Record<string, unknown>;
+        try { data = JSON.parse(text); }
+        catch { setError(`Erreur serveur (${res.status})`); return; }
+        if (data.error) setError(data.error as string);
+        else if (data.room) setRoom(data.room as ClientRoom); // apply immediately
+      } catch (e) {
+        console.error("action error", e);
+        setError("Erreur réseau");
+      }
     },
     [roomCode, playerId]
   );

@@ -59,5 +59,15 @@ export async function POST(
     }
   }
 
-  return NextResponse.json({ ok: true });
+  // Return updated room so client can apply it immediately (no waiting for Realtime)
+  const { data: updated } = await sb
+    .from("rooms")
+    .select("*")
+    .eq("code", code.toUpperCase())
+    .single();
+
+  return NextResponse.json({
+    ok: true,
+    room: updated ? sanitizeRoom(updated as RoomDB, playerId) : null,
+  });
 }

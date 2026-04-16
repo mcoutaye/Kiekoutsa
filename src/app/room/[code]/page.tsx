@@ -17,7 +17,7 @@ export default function RoomPage() {
   const router = useRouter();
   const { room, playerId, roomCode, error } = useGame();
   const urlCode = (params.code as string).toUpperCase();
-  const [codeBlurred, setCodeBlurred] = useState(false);
+  const [codeBlurred, setCodeBlurred] = useState(true);
   const [copied, setCopied] = useState(false);
 
   // Auto-blur code when game starts
