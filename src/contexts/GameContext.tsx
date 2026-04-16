@@ -56,14 +56,30 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const playerId = useRef(getClientId()).current;
   const prevPlayingStartedAt = useRef<string | null>(null);
 
-  // ── Subscribe to Supabase Realtime ─────────────────────────────────────
+  // ── Subscribe to Supabase Realtime + polling fallback ──────────────────
   useEffect(() => {
     if (!roomCode) return;
 
+    const applyRoomDB = (newRoom: RoomDB) => {
+      const sanitized = sanitizeRoom(newRoom, playerId);
+      setRoom(sanitized);
+      if (
+        newRoom.playing_started_at &&
+        newRoom.playing_started_at !== prevPlayingStartedAt.current
+      ) {
+        prevPlayingStartedAt.current = newRoom.playing_started_at;
+        setAudioSignal((n) => n + 1);
+      }
+    };
+
+    const fetchRoom = () =>
+      fetch(`/api/rooms/${roomCode}?playerId=${encodeURIComponent(playerId)}`)
+        .then((r) => r.json())
+        .then(({ room: r }) => { if (r) setRoom(r); })
+        .catch(() => {});
+
     // Initial fetch
-    fetch(`/api/rooms/${roomCode}?playerId=${encodeURIComponent(playerId)}`)
-      .then((r) => r.json())
-      .then(({ room: r }) => { if (r) setRoom(r); });
+    fetchRoom();
 
     // Realtime subscription
     const channel = supabase
@@ -71,24 +87,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "rooms", filter: `code=eq.${roomCode}` },
-        (payload) => {
-          const newRoom = payload.new as RoomDB;
-          const sanitized = sanitizeRoom(newRoom, playerId);
-          setRoom(sanitized);
-
-          // Detect music start (playing_started_at set or changed)
-          if (
-            newRoom.playing_started_at &&
-            newRoom.playing_started_at !== prevPlayingStartedAt.current
-          ) {
-            prevPlayingStartedAt.current = newRoom.playing_started_at;
-            setAudioSignal((n) => n + 1);
-          }
-        }
+        (payload) => applyRoomDB(payload.new as RoomDB)
       )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    // Polling fallback every 4s (catches Realtime misses)
+    const poll = setInterval(fetchRoom, 4000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(poll);
+    };
   }, [roomCode, playerId]);
 
   // ── Action helper ───────────────────────────────────────────────────────

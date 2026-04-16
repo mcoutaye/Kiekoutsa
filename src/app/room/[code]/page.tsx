@@ -20,10 +20,9 @@ export default function RoomPage() {
   const [codeBlurred, setCodeBlurred] = useState(true);
   const [copied, setCopied] = useState(false);
 
-  // Auto-blur code when game starts
+  // Auto-blur code when game leaves lobby
   useEffect(() => {
     if (room && room.phase !== "lobby") setCodeBlurred(true);
-    else setCodeBlurred(false);
   }, [room?.phase]);
 
   // Redirect if room not found

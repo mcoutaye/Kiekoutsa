@@ -27,6 +27,13 @@ export default function Lobby() {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6 gap-6 max-w-sm mx-auto w-full">
+      {/* Room code */}
+      <div className="text-center">
+        <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">Code du salon</p>
+        <p className="text-5xl font-black tracking-widest text-purple-300 font-mono">{room.code}</p>
+        <p className="text-xs text-gray-600 mt-1">Partage ce code pour inviter des amis</p>
+      </div>
+
       {/* Players */}
       <div className="w-full">
         <div className="flex items-center gap-2 mb-3">
