@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useGame } from "@/contexts/GameContext";
-import { Crown, Settings, ChevronDown, ChevronUp, Users } from "lucide-react";
+import { Crown, Settings, ChevronDown, ChevronUp, Users, Eye, EyeOff, Copy, Check } from "lucide-react";
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -18,6 +18,16 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 export default function Lobby() {
   const { room, playerId, startSelection, setSettings, error } = useGame();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [codeVisible, setCodeVisible] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copyCode = () => {
+    if (!room) return;
+    navigator.clipboard.writeText(room.code).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
 
   if (!room) return null;
   const me = room.players.find((p) => p.id === playerId);
@@ -29,9 +39,26 @@ export default function Lobby() {
     <div className="flex-1 flex flex-col items-center justify-center p-6 gap-6 max-w-sm mx-auto w-full">
       {/* Room code */}
       <div className="text-center">
-        <p className="text-xs text-gray-500 uppercase tracking-widest mb-1">Code du salon</p>
-        <p className="text-5xl font-black tracking-widest text-purple-300 font-mono">{room.code}</p>
-        <p className="text-xs text-gray-600 mt-1">Partage ce code pour inviter des amis</p>
+        <p className="text-xs text-gray-500 uppercase tracking-widest mb-2">Code du salon</p>
+        <div
+          className="text-5xl font-black tracking-widest text-purple-300 font-mono cursor-pointer select-none transition-all duration-300 mb-2"
+          style={{ filter: codeVisible ? "none" : "blur(10px)" }}
+          onClick={() => setCodeVisible((v) => !v)}
+          title={codeVisible ? "Masquer" : "Révéler le code"}
+        >
+          {room.code}
+        </div>
+        <div className="flex items-center justify-center gap-2">
+          <button onClick={() => setCodeVisible((v) => !v)} className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-colors">
+            {codeVisible ? <EyeOff size={12} /> : <Eye size={12} />}
+            {codeVisible ? "Masquer" : "Révéler"}
+          </button>
+          <span className="text-gray-700">·</span>
+          <button onClick={copyCode} className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-colors">
+            {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
+            {copied ? "Copié !" : "Copier"}
+          </button>
+        </div>
       </div>
 
       {/* Players */}

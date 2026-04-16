@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useGame } from "@/contexts/GameContext";
-import { Copy, Check, Disc3, Music } from "lucide-react";
+import { Copy, Check, Disc3, Music, LogOut } from "lucide-react";
 import Lobby from "@/components/Lobby";
 import Selection from "@/components/Selection";
 import ModeSelection from "@/components/ModeSelection";
@@ -100,6 +100,15 @@ export default function RoomPage() {
               Host
             </span>
           )}
+
+          <button
+            onClick={() => router.push("/")}
+            className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 transition-colors"
+            style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
+            title="Quitter le salon"
+          >
+            <LogOut size={14} />
+          </button>
         </div>
       </div>
 

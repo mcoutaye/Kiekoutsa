@@ -49,8 +49,9 @@ export default function VotingPhase() {
         <div className="grid grid-cols-2 gap-3">
           {room.players.map((p) => {
             const isSelf = p.id === playerId;
-            const disabled = !room.settings.allowSelfVote && isSelf;
-            const isPending = pendingVote === p.id;
+            const locked = !!myVote; // vote is locked after confirmation
+            const disabled = (!room.settings.allowSelfVote && isSelf) || locked;
+            const isPending = !locked && pendingVote === p.id;
             const isConfirmed = myVote === p.id;
             const voteCount = room.voteCounts[p.id] ?? 0;
             const hasVoted = room.votedPlayerIds.includes(p.id);
@@ -58,7 +59,7 @@ export default function VotingPhase() {
             return (
               <button key={p.id} onClick={() => !disabled && setPendingVote(p.id)} disabled={disabled}
                 className={`relative flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left
-                  ${isPending ? "border-purple-500 bg-purple-900/40" : isConfirmed ? "border-green-600/40 bg-green-900/10" : disabled ? "border-transparent opacity-30 cursor-not-allowed" : "border-transparent hover:border-purple-500/50 cursor-pointer"}`}
+                  ${isPending ? "border-purple-500 bg-purple-900/40" : isConfirmed ? "border-green-500 bg-green-900/30" : disabled ? "border-transparent opacity-40 cursor-not-allowed" : "border-transparent hover:border-purple-500/50 cursor-pointer"}`}
                 style={{ background: isPending || isConfirmed ? undefined : "var(--surface)" }}>
                 <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-gray-700">
                   {p.avatar ? <img src={p.avatar} alt={p.name} className="w-full h-full object-cover" /> : null}
@@ -80,18 +81,17 @@ export default function VotingPhase() {
           })}
         </div>
 
-        {/* Confirm / change */}
+        {/* Confirm / locked */}
         <div className="mt-4">
-          {pendingChanged ? (
+          {myVote ? (
+            <p className="text-center text-green-400 text-sm flex items-center justify-center gap-1.5">
+              <Check size={14} /> Vote verrouillé
+            </p>
+          ) : pendingVote ? (
             <button onClick={() => castVote(pendingVote!)}
               className="w-full py-3 rounded-xl font-bold text-sm bg-purple-600 hover:bg-purple-500 text-white transition-all active:scale-95 flex items-center justify-center gap-2">
-              <Check size={15} />
-              {myVote ? "Modifier mon vote" : "Confirmer mon vote"}
+              <Check size={15} /> Confirmer mon vote
             </button>
-          ) : myVote ? (
-            <p className="text-center text-green-400 text-sm flex items-center justify-center gap-1.5">
-              <Check size={14} /> Vote confirmé — clique sur quelqu&apos;un pour changer
-            </p>
           ) : (
             <p className="text-center text-gray-500 text-sm">Clique sur un joueur pour voter</p>
           )}

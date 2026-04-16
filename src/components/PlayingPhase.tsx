@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { Play, Eye } from "lucide-react";
+import { Play, Eye, Check } from "lucide-react";
 import { useGame } from "@/contexts/GameContext";
 
 export default function PlayingPhase() {
@@ -143,8 +143,9 @@ export default function PlayingPhase() {
         <div className="grid grid-cols-2 gap-2">
           {room.players.map((p) => {
             const isSelf = p.id === playerId;
-            const disabled = !room.settings.allowSelfVote && isSelf;
-            const isPending = pendingVote === p.id;
+            const locked = !!myVote;
+            const disabled = (!room.settings.allowSelfVote && isSelf) || locked;
+            const isPending = !locked && pendingVote === p.id;
             const isConfirmed = myVote === p.id;
             const voteCount = room.voteCounts[p.id] ?? 0;
 
@@ -152,7 +153,7 @@ export default function PlayingPhase() {
               <button key={p.id} onClick={() => !disabled && handleVoteClick(p.id)}
                 disabled={disabled}
                 className={`relative flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm border-2 transition-all
-                  ${isPending ? "border-purple-500 bg-purple-900/40 text-purple-200" : isConfirmed && !isPending ? "border-green-600/50 bg-green-900/20 text-green-300" : disabled ? "border-transparent opacity-30 cursor-not-allowed" : "border-transparent hover:border-purple-500/50 cursor-pointer"}`}
+                  ${isPending ? "border-purple-500 bg-purple-900/40 text-purple-200" : isConfirmed ? "border-green-500 bg-green-900/30 text-green-300" : disabled ? "border-transparent opacity-30 cursor-not-allowed" : "border-transparent hover:border-purple-500/50 cursor-pointer"}`}
                 style={{ background: isPending || isConfirmed ? undefined : "var(--surface)" }}>
                 <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 bg-gray-700">
                   {p.avatar ? <img src={p.avatar} alt={p.name} className="w-full h-full object-cover" /> : null}
@@ -168,20 +169,20 @@ export default function PlayingPhase() {
           })}
         </div>
 
-        {/* Confirm button */}
         <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
           <span>{room.votedPlayerIds.length}/{room.players.length} ont voté</span>
         </div>
 
-        {pendingChanged && (
+        {myVote ? (
+          <p className="text-center text-green-400 text-xs mt-3 flex items-center justify-center gap-1">
+            <Check size={12} /> Vote verrouillé
+          </p>
+        ) : pendingVote ? (
           <button onClick={confirmVote}
             className="w-full mt-3 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 bg-purple-600 hover:bg-purple-500 text-white">
-            {myVote ? "Modifier mon vote" : "Confirmer mon vote"}
+            Confirmer mon vote
           </button>
-        )}
-        {myVote && !pendingChanged && (
-          <p className="text-center text-green-400 text-xs mt-3">Vote enregistré — tu peux le modifier</p>
-        )}
+        ) : null}
 
         {isHost && (
           <button onClick={forceReveal}
