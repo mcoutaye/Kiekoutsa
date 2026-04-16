@@ -231,7 +231,7 @@ export default function Selection() {
                     <span className="text-gray-500 text-xs ml-1">(toi)</span>
                   )}
                 </span>
-                <span className="text-xs text-gray-500">{p.trackCount} 🎵</span>
+                <span className="text-xs text-gray-500">🎵</span>
               </div>
             ))}
           </div>
