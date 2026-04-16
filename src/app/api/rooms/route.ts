@@ -17,6 +17,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 });
   }
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) {
+    return NextResponse.json(
+      { error: `Variables manquantes: URL=${!!supabaseUrl} KEY=${!!serviceKey}` },
+      { status: 500 }
+    );
+  }
+
   const sb = createServerSupabase();
 
   // Generate unique code
