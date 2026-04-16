@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useGame } from "@/contexts/GameContext";
-import { Crown, Settings, ChevronDown, ChevronUp, Users, Eye, EyeOff, Copy, Check } from "lucide-react";
+import { Crown, Settings, ChevronDown, ChevronUp, Users, Eye, EyeOff, Copy, Check, UserX } from "lucide-react";
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -16,7 +16,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 }
 
 export default function Lobby() {
-  const { room, playerId, startSelection, setSettings, error } = useGame();
+  const { room, playerId, startSelection, setSettings, kickPlayer, error } = useGame();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [codeVisible, setCodeVisible] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -85,6 +85,11 @@ export default function Lobby() {
               <span className="flex-1 font-medium text-white text-sm">{p.name}</span>
               {p.isHost && <Crown size={14} className="text-yellow-400 flex-shrink-0" />}
               {p.id === playerId && <span className="text-xs text-gray-500">(toi)</span>}
+              {isHost && !p.isHost && p.id !== playerId && (
+                <button onClick={() => kickPlayer(p.id)} className="text-gray-700 hover:text-red-400 transition-colors flex-shrink-0" title="Exclure">
+                  <UserX size={14} />
+                </button>
+              )}
             </div>
           ))}
         </div>

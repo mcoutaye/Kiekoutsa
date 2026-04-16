@@ -22,7 +22,7 @@ export default function HomePage() {
     setLoading(true);
     clearError();
     const roomCode = await createRoom(name.trim(), avatar);
-    if (roomCode) router.push(`/room/${roomCode}`);
+    if (roomCode) router.push("/room");
     else setLoading(false);
   };
 
@@ -31,7 +31,7 @@ export default function HomePage() {
     setLoading(true);
     clearError();
     const roomCode = await joinRoom(code.trim(), name.trim(), avatar);
-    if (roomCode) router.push(`/room/${roomCode}`);
+    if (roomCode) router.push("/room");
     else setLoading(false);
   };
 

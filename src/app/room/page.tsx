@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useGame } from "@/contexts/GameContext";
 import { Copy, Check, Disc3, Music, LogOut } from "lucide-react";
 import Lobby from "@/components/Lobby";
@@ -13,10 +13,8 @@ import RevealPhase from "@/components/RevealPhase";
 import EndScreen from "@/components/EndScreen";
 
 export default function RoomPage() {
-  const params = useParams();
   const router = useRouter();
   const { room, playerId, roomCode, error } = useGame();
-  const urlCode = (params.code as string).toUpperCase();
   const [codeBlurred, setCodeBlurred] = useState(true);
   const [copied, setCopied] = useState(false);
 
@@ -25,25 +23,32 @@ export default function RoomPage() {
     if (room && room.phase !== "lobby") setCodeBlurred(true);
   }, [room?.phase]);
 
-  // Redirect if room not found
+  // Redirect if no room (direct navigation or session lost)
+  useEffect(() => {
+    if (!roomCode && typeof window !== "undefined") {
+      const saved = sessionStorage.getItem("kiekoutsa_room_code");
+      if (!saved) router.replace("/");
+    }
+  }, [roomCode, router]);
+
   useEffect(() => {
     if (error === "Salon introuvable") router.push("/");
   }, [error, router]);
 
   const copyCode = useCallback(() => {
-    const code = room?.code ?? urlCode;
-    navigator.clipboard.writeText(code).then(() => {
+    if (!room?.code) return;
+    navigator.clipboard.writeText(room.code).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
-  }, [room?.code, urlCode]);
+  }, [room?.code]);
 
   if (!room) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <Disc3 className="text-purple-400 animate-spin mx-auto mb-4" size={40} />
-          <p className="text-gray-400">Connexion au salon {urlCode}…</p>
+          <p className="text-gray-400">Connexion au salon…</p>
         </div>
       </div>
     );
@@ -51,7 +56,6 @@ export default function RoomPage() {
 
   const me = room.players.find((p) => p.id === playerId);
   const isHost = me?.isHost ?? false;
-  const displayCode = room.code ?? urlCode;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -73,7 +77,7 @@ export default function RoomPage() {
             </div>
           )}
 
-          {/* Room code (blurred in game) + copy */}
+          {/* Room code (blurred) + copy */}
           <div className="flex items-center gap-1">
             <div
               className="px-3 py-1.5 rounded-lg font-mono font-bold text-purple-300 text-sm cursor-pointer"
@@ -82,7 +86,7 @@ export default function RoomPage() {
               title={codeBlurred ? "Afficher le code" : "Masquer le code"}
             >
               <span className={`transition-all duration-300 select-none ${codeBlurred ? "blur-sm" : ""}`}>
-                {displayCode}
+                {room.code}
               </span>
             </div>
             <button
@@ -102,7 +106,7 @@ export default function RoomPage() {
           )}
 
           <button
-            onClick={() => router.push("/")}
+            onClick={() => { sessionStorage.removeItem("kiekoutsa_room_code"); router.push("/"); }}
             className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 transition-colors"
             style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
             title="Quitter le salon"

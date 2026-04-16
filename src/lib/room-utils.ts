@@ -167,6 +167,14 @@ export function applyAction(
       return { update: { players: [...room.players], updated_at: now } };
     }
 
+    case "kick-player": {
+      if (!isHost || room.phase !== "lobby") return { error: "Non autorisé" };
+      const targetId = payload.targetId as string;
+      if (!targetId || targetId === playerId) return { error: "Cible invalide" };
+      const remaining = room.players.filter((p) => p.id !== targetId);
+      return { update: { players: remaining, updated_at: now } };
+    }
+
     case "start-selection": {
       if (!isHost) return { error: "Non autorisé" };
       if (room.players.length < 3) return { error: "Il faut au moins 3 joueurs" };

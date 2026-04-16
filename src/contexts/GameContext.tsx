@@ -44,17 +44,31 @@ interface GameContextType {
   forceReveal: () => void;
   nextRound: () => void;
   playAgain: () => void;
+  kickPlayer: (targetId: string) => void;
 }
 
 const GameContext = createContext<GameContextType | null>(null);
 
+function getSavedRoomCode(): string | null {
+  if (typeof window === "undefined") return null;
+  return sessionStorage.getItem("kiekoutsa_room_code");
+}
+
 export function GameProvider({ children }: { children: ReactNode }) {
   const [room, setRoom] = useState<ClientRoom | null>(null);
-  const [roomCode, setRoomCode] = useState<string | null>(null);
+  const [roomCode, setRoomCodeState] = useState<string | null>(() => getSavedRoomCode());
   const [error, setError] = useState<string | null>(null);
   const [audioSignal, setAudioSignal] = useState(0);
   const playerId = useRef(getClientId()).current;
   const prevPlayingStartedAt = useRef<string | null>(null);
+
+  const setRoomCode = useCallback((code: string | null) => {
+    setRoomCodeState(code);
+    if (typeof window !== "undefined") {
+      if (code) sessionStorage.setItem("kiekoutsa_room_code", code);
+      else sessionStorage.removeItem("kiekoutsa_room_code");
+    }
+  }, []);
 
   // ── Subscribe to Supabase Realtime + polling fallback ──────────────────
   useEffect(() => {
@@ -191,6 +205,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const forceReveal = useCallback(() => action("force-reveal"), [action]);
   const nextRound = useCallback(() => action("next-round"), [action]);
   const playAgain = useCallback(() => action("play-again"), [action]);
+  const kickPlayer = useCallback((targetId: string) => action("kick-player", { targetId }), [action]);
   const clearError = useCallback(() => setError(null), []);
 
   return (
@@ -199,7 +214,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       clearError, createRoom, joinRoom, addTrack, removeTrack, setReady,
       startSelection, startModeSelection, setPlaybackMode, setSettings,
       startGame, hostStartMusic, transitionToVoting,
-      castVote, forceReveal, nextRound, playAgain,
+      castVote, forceReveal, nextRound, playAgain, kickPlayer,
     }}>
       {children}
     </GameContext.Provider>
