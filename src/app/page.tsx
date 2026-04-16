@@ -68,7 +68,7 @@ export default function HomePage() {
         <label className="block mb-2 text-sm font-medium text-gray-400">Pseudo</label>
         <input type="text" value={name} onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") tab === "create" ? handleCreate() : handleJoin(); }}
-          placeholder="Ex: Romain" maxLength={20}
+          placeholder="Ex: DamiDams" maxLength={20}
           className="w-full px-4 py-3 rounded-xl text-white placeholder-gray-600 outline-none mb-4 focus:ring-2 focus:ring-purple-500"
           style={{ background: "var(--bg)", border: "1px solid var(--border)" }} />
 

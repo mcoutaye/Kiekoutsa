@@ -10,7 +10,7 @@ const MODES = [
     title: "Maître du jeu",
     subtitle: "Style Jackbox",
     description:
-      "Le son sort UNIQUEMENT sur l'appareil du Host. Parfait pour partager son écran via Discord ou Zoom. Tout le monde regarde.",
+      "Le son sort UNIQUEMENT sur l'appareil du Host. Parfait pour partager son écran via Discord.",
     color: "from-blue-800 to-indigo-900",
     border: "border-blue-600",
     glow: "shadow-blue-900/50",
@@ -21,7 +21,7 @@ const MODES = [
     title: "Mode Synchronisé",
     subtitle: "Son chez tout le monde",
     description:
-      "Chaque joueur entend la musique directement dans son navigateur, en simultané. Idéal si vous n'êtes pas sur le même appel.",
+      "Chaque joueur entend la musique directement dans son navigateur, en simultané.",
     color: "from-purple-800 to-pink-900",
     border: "border-purple-600",
     glow: "shadow-purple-900/50",
