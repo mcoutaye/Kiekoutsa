@@ -24,11 +24,9 @@ export default function RoomPage() {
   }, [room?.phase]);
 
   // Redirect if no room (direct navigation or session lost)
+  // Redirect if kicked (roomCode cleared by GameContext) or no session
   useEffect(() => {
-    if (!roomCode && typeof window !== "undefined") {
-      const saved = sessionStorage.getItem("kiekoutsa_room_code");
-      if (!saved) router.replace("/");
-    }
+    if (!roomCode) router.replace("/");
   }, [roomCode, router]);
 
   useEffect(() => {

@@ -75,6 +75,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (!roomCode) return;
 
     const applyRoomDB = (newRoom: RoomDB) => {
+      // If this player is no longer in the room, they were kicked
+      const stillInRoom = newRoom.players.some((p) => p.id === playerId);
+      if (!stillInRoom) {
+        setRoomCode(null);
+        setRoom(null);
+        return;
+      }
       const sanitized = sanitizeRoom(newRoom, playerId);
       setRoom(sanitized);
       if (
@@ -89,7 +96,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const fetchRoom = () =>
       fetch(`/api/rooms/${roomCode}?playerId=${encodeURIComponent(playerId)}`)
         .then((r) => r.json())
-        .then(({ room: r }) => { if (r) setRoom(r); })
+        .then(({ room: r }: { room: ClientRoom | null }) => {
+          if (!r) return;
+          // If this player is not in the room anymore, they were kicked
+          if (!r.players.some((p) => p.id === playerId)) {
+            setRoomCode(null);
+            setRoom(null);
+            return;
+          }
+          setRoom(r);
+        })
         .catch(() => {});
 
     // Initial fetch
