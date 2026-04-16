@@ -109,33 +109,51 @@ export function GameProvider({ children }: { children: ReactNode }) {
   // ── Create / Join ───────────────────────────────────────────────────────
   const createRoom = useCallback(
     async (playerName: string, avatar: string): Promise<string | null> => {
-      const res = await fetch("/api/rooms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ playerName, avatar, playerId }),
-      });
-      const data = await res.json();
-      if (data.error) { setError(data.error); return null; }
-      setRoomCode(data.roomCode);
-      setRoom(data.room);
-      return data.roomCode;
+      try {
+        const res = await fetch("/api/rooms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ playerName, avatar, playerId }),
+        });
+        const text = await res.text();
+        let data: Record<string, unknown>;
+        try { data = JSON.parse(text); }
+        catch { setError(`Erreur serveur (${res.status}): ${text.slice(0, 100)}`); return null; }
+        if (data.error) { setError(data.error as string); return null; }
+        setRoomCode(data.roomCode as string);
+        setRoom(data.room as ClientRoom);
+        return data.roomCode as string;
+      } catch (e) {
+        setError("Impossible de contacter le serveur");
+        console.error(e);
+        return null;
+      }
     },
     [playerId]
   );
 
   const joinRoom = useCallback(
     async (code: string, playerName: string, avatar: string): Promise<string | null> => {
-      const upper = code.toUpperCase().trim();
-      const res = await fetch(`/api/rooms/${upper}/action`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "join-room", playerId, payload: { playerName, avatar } }),
-      });
-      const data = await res.json();
-      if (data.error) { setError(data.error); return null; }
-      setRoomCode(upper);
-      setRoom(data.room);
-      return upper;
+      try {
+        const upper = code.toUpperCase().trim();
+        const res = await fetch(`/api/rooms/${upper}/action`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "join-room", playerId, payload: { playerName, avatar } }),
+        });
+        const text = await res.text();
+        let data: Record<string, unknown>;
+        try { data = JSON.parse(text); }
+        catch { setError(`Erreur serveur (${res.status}): ${text.slice(0, 100)}`); return null; }
+        if (data.error) { setError(data.error as string); return null; }
+        setRoomCode(upper);
+        setRoom(data.room as ClientRoom);
+        return upper;
+      } catch (e) {
+        setError("Impossible de contacter le serveur");
+        console.error(e);
+        return null;
+      }
     },
     [playerId]
   );
