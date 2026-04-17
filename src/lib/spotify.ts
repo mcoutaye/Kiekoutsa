@@ -16,7 +16,7 @@ export async function searchSpotifyTracks(query: string): Promise<SpotifyTrack[]
     name: item.title,
     artists: item.artist?.name ?? "Inconnu",
     albumCover: item.album?.cover_medium ?? item.album?.cover ?? "",
-    previewUrl: item.preview ?? null,
+    previewUrl: item.preview ? item.preview.replace(/^http:\/\//, "https://") : null,
     durationMs: (item.duration ?? 30) * 1000,
   }));
 }
