@@ -12,9 +12,13 @@ CREATE TABLE IF NOT EXISTS rooms (
   current_track JSONB,
   votes JSONB NOT NULL DEFAULT '{}',
   round_results JSONB NOT NULL DEFAULT '[]',
+  chat_messages JSONB NOT NULL DEFAULT '[]',
   playing_started_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- If the table already exists, ensure the column exists as well
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS chat_messages JSONB NOT NULL DEFAULT '[]';
 
 -- Désactiver RLS pour le prototype (activer + policies pour la prod)
 ALTER TABLE rooms DISABLE ROW LEVEL SECURITY;

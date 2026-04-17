@@ -59,6 +59,7 @@ export async function POST(req: NextRequest) {
     current_track: null,
     votes: {},
     round_results: [],
+    chat_messages: [],
     playing_started_at: null,
   };
 

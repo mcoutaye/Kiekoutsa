@@ -1,3 +1,5 @@
+import type { ChatMessage } from "@/types/chat";
+
 export type GamePhase =
   | "lobby"
   | "selection"
@@ -86,6 +88,7 @@ export interface ClientRoom {
   myVote: string | null;
   roundResults: RoundResult[];
   playingStartedAt: string | null;
+  chatMessages?: ChatMessage[];
 }
 
 export interface SpotifyTrack {

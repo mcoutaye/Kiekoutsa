@@ -2,6 +2,7 @@ import type {
   GamePhase, PlaybackMode, RoomSettings, Track,
   ClientRoom, ClientTrack, VoteResult, RoundResult,
 } from "@/types/game";
+import type { ChatMessage } from "@/types/chat";
 import { DEFAULT_SETTINGS } from "@/types/game";
 
 // ─── DB shape (snake_case, stored in Supabase) ─────────────────────────────
@@ -26,6 +27,7 @@ export interface RoomDB {
   current_track: Track | null;
   votes: Record<string, string>;
   round_results: RoundResult[];
+  chat_messages?: ChatMessage[];
   playing_started_at: string | null;
   updated_at: string;
 }
@@ -63,8 +65,14 @@ export function computeVoteCounts(
 // ─── Client-side sanitization ───────────────────────────────────────────────
 export function sanitizeRoom(room: RoomDB, myPlayerId: string): ClientRoom {
   const isReveal = room.phase === "reveal" || room.phase === "end";
-  const me = room.players.find((p) => p.id === myPlayerId);
-  const playerIds = room.players.map((p) => p.id);
+  const players = Array.isArray((room as any).players) ? (room as any).players : [];
+  const trackQueue = Array.isArray((room as any).track_queue) ? (room as any).track_queue : [];
+  const votes = (room as any).votes && typeof (room as any).votes === "object" ? (room as any).votes : {};
+  const roundResults = Array.isArray((room as any).round_results) ? (room as any).round_results : [];
+  const chatMessages = Array.isArray((room as any).chat_messages) ? (room as any).chat_messages : [];
+
+  const me = players.find((p: any) => p.id === myPlayerId);
+  const playerIds = players.map((p: any) => p.id);
 
   const currentTrack: ClientTrack | null = room.current_track
     ? {
@@ -75,7 +83,7 @@ export function sanitizeRoom(room: RoomDB, myPlayerId: string): ClientRoom {
         previewUrl: room.current_track.previewUrl,
         addedBy: isReveal ? room.current_track.addedBy : null,
         addedByName: isReveal
-          ? (room.players.find((p) => p.id === room.current_track!.addedBy)
+          ? (players.find((p: any) => p.id === room.current_track!.addedBy)
               ?.name ?? "Inconnu")
           : null,
       }
@@ -88,8 +96,8 @@ export function sanitizeRoom(room: RoomDB, myPlayerId: string): ClientRoom {
     settings: room.settings ?? DEFAULT_SETTINGS,
     currentTrack,
     currentTrackIndex: room.current_track_index,
-    totalTracks: room.track_queue.length,
-    players: room.players.map((p) => ({
+    totalTracks: trackQueue.length,
+    players: players.map((p: any) => ({
       id: p.id,
       name: p.name,
       avatar: p.avatar,
@@ -98,11 +106,12 @@ export function sanitizeRoom(room: RoomDB, myPlayerId: string): ClientRoom {
       score: p.score,
     })),
     myTracks: me?.tracks ?? [],
-    votedPlayerIds: Object.keys(room.votes),
-    voteCounts: computeVoteCounts(room.votes, playerIds),
-    myVote: room.votes[myPlayerId] ?? null,
-    roundResults: room.round_results ?? [],
+    votedPlayerIds: Object.keys(votes),
+    voteCounts: computeVoteCounts(votes, playerIds),
+    myVote: votes[myPlayerId] ?? null,
+    roundResults: roundResults ?? [],
     playingStartedAt: room.playing_started_at ?? null,
+    chatMessages: chatMessages ?? [],
   };
 }
 
@@ -119,6 +128,52 @@ export function applyAction(
   const now = new Date().toISOString();
 
   switch (action) {
+    case "send-chat": {
+      // Chat is available regardless of playback mode
+      if (!player) return { error: "Non autorisé" };
+      const raw = String(payload?.text ?? "");
+      const text = raw.trim().slice(0, 300);
+      if (!text) return { error: "Message vide" };
+
+      const msg: ChatMessage = {
+        id: crypto.randomUUID(),
+        playerId,
+        playerName: player.name,
+        playerAvatar: player.avatar,
+        text,
+        createdAt: now,
+      };
+
+      const prev = room.chat_messages ?? [];
+      const next = [...prev, msg].slice(-200); // cap history
+      return { update: { chat_messages: next, updated_at: now } };
+    }
+
+    case "leave-room": {
+      // Allow leaving at any time
+      if (!player) return { update: {} }; // already gone
+
+      const remaining = room.players.filter((p) => p.id !== playerId);
+
+      // Remove votes cast by the leaver and votes targeting the leaver
+      const newVotes: Record<string, string> = {};
+      for (const [voterId, suspectedId] of Object.entries(room.votes ?? {})) {
+        if (voterId === playerId) continue;
+        if (suspectedId === playerId) continue;
+        newVotes[voterId] = suspectedId;
+      }
+
+      // If host leaves, transfer host to first remaining player (if any)
+      if (isHost && remaining.length > 0) {
+        remaining[0] = { ...remaining[0], is_host: true };
+      }
+
+      // Optional: remove chat messages from the leaver (keeps transcript cleaner)
+      const nextChat = (room.chat_messages ?? []).filter((m) => m.playerId !== playerId);
+
+      return { update: { players: remaining, votes: newVotes, chat_messages: nextChat, updated_at: now } };
+    }
+
     case "join-room": {
       if (room.phase !== "lobby") return { error: "La partie a déjà commencé" };
       if (room.players.length >= 10) return { error: "Le salon est plein" };
@@ -275,7 +330,7 @@ export function applyAction(
         update: {
           phase: "lobby", playback_mode: null, players: reset,
           track_queue: [], current_track_index: -1, current_track: null,
-          votes: {}, round_results: [], playing_started_at: null, updated_at: now,
+          votes: {}, round_results: [], chat_messages: [], playing_started_at: null, updated_at: now,
         },
       };
     }

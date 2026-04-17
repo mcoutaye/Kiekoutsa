@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useGame } from "@/contexts/GameContext";
 import { Crown, Settings, ChevronDown, ChevronUp, Users, Eye, EyeOff, Copy, Check, UserX } from "lucide-react";
+import ChatPanel from "@/components/ChatPanel";
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -34,6 +35,9 @@ export default function Lobby() {
   const isHost = me?.isHost ?? false;
   const canStart = room.players.length >= 3;
   const s = room.settings;
+
+  // Chat should be visible from lobby and throughout the game (except selection)
+  const showChat = true;
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6 gap-6 max-w-sm mx-auto w-full">
@@ -173,6 +177,12 @@ export default function Lobby() {
         <div className="flex items-center gap-2 text-gray-500">
           <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" />
           <p className="text-sm">En attente du host…</p>
+        </div>
+      )}
+
+      {showChat && (
+        <div className="w-full">
+          <ChatPanel className="h-72" />
         </div>
       )}
     </div>

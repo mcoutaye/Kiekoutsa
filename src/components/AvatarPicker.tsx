@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { RefreshCw, Upload } from "lucide-react";
 
 const STYLES = ["bottts-neutral", "fun-emoji", "adventurer-neutral"];
@@ -19,11 +19,16 @@ interface AvatarPickerProps {
 }
 
 export default function AvatarPicker({ value, onChange }: AvatarPickerProps) {
-  const [seeds, setSeeds] = useState<string[]>(() =>
-    Array.from({ length: 9 }, randomSeed)
-  );
+  const [mounted, setMounted] = useState(false);
+  const [seeds, setSeeds] = useState<string[]>(() => Array.from({ length: 9 }, () => ""));
   const [styleIdx, setStyleIdx] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Generate random seeds only on client to avoid hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+    setSeeds(Array.from({ length: 9 }, randomSeed));
+  }, []);
 
   const reroll = useCallback(() => {
     setSeeds(Array.from({ length: 9 }, randomSeed));
@@ -91,33 +96,46 @@ export default function AvatarPicker({ value, onChange }: AvatarPickerProps) {
       </div>
 
       {/* Avatar grid */}
-      <div className="grid grid-cols-9 gap-1.5 mb-3">
-        {seeds.map((seed) => {
-          const url = dicebearUrl(seed, style);
-          const selected = value === url;
-          return (
-            <button
-              key={seed}
-              onClick={() => onChange(url)}
-              className={`w-full aspect-square rounded-lg overflow-hidden border-2 transition-all ${
-                selected
-                  ? "border-purple-500 scale-105"
-                  : "border-transparent hover:border-gray-500"
-              }`}
-              style={{ background: "var(--surface)" }}
-            >
-              <img src={url} alt="avatar" className="w-full h-full object-cover" />
-            </button>
-          );
-        })}
-      </div>
+      {!mounted ? (
+        <div className="grid grid-cols-9 gap-1.5 mb-3">
+          {Array.from({ length: 9 }).map((_, i) => (
+            <div
+              key={i}
+              className="w-full aspect-square rounded-lg"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-9 gap-1.5 mb-3">
+          {seeds.map((seed) => {
+            const url = dicebearUrl(seed, style);
+            const selected = value === url;
+            return (
+              <button
+                key={seed}
+                onClick={() => onChange(url)}
+                className={`w-full aspect-square rounded-lg overflow-hidden border-2 transition-all ${
+                  selected
+                    ? "border-purple-500 scale-105"
+                    : "border-transparent hover:border-gray-500"
+                }`}
+                style={{ background: "var(--surface)" }}
+              >
+                <img src={url} alt="avatar" className="w-full h-full object-cover" />
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Actions */}
       <div className="flex gap-2">
         <button
           onClick={reroll}
+          disabled={!mounted}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-            bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors"
+            bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <RefreshCw size={12} />
           Nouveaux avatars

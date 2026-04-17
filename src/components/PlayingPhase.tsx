@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { Play, Eye, Check } from "lucide-react";
 import { useGame } from "@/contexts/GameContext";
+import ChatPanel from "@/components/ChatPanel";
 
 export default function PlayingPhase() {
   const { room, playerId, audioSignal, castVote, forceReveal, hostStartMusic, transitionToVoting } = useGame();
   const audioElRef = useRef<HTMLAudioElement>(null);
   const [progress, setProgress] = useState(100);
-  const [audioPlaying, setAudioPlaying] = useState(false);
+  const [, setAudioPlaying] = useState(false);
   const progressRef = useRef<NodeJS.Timeout | null>(null);
   const hostTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -20,10 +21,11 @@ export default function PlayingPhase() {
 
   const track = room.currentTrack;
   const isHost = room.players.find((p) => p.id === playerId)?.isHost ?? false;
+  const myVote = room.myVote ?? null;
   const shouldPlayAudio =
     room.playbackMode === "sync" ||
     (room.playbackMode === "master" && isHost);
-  const myVote = room.myVote;
+  const chatEnabled = true;
 
   // Reset pending vote on new track
   // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -89,13 +91,13 @@ export default function PlayingPhase() {
   const pendingChanged = pendingVote !== null && pendingVote !== myVote;
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 gap-6 max-w-4xl mx-auto w-full">
+    <div className="flex-1 flex flex-col items-center justify-center p-6 gap-6 max-w-5xl mx-auto w-full">
       <audio ref={audioElRef} style={{ display: "none" }} />
 
       {/* Track info */}
       <div className="flex flex-col items-center gap-4">
         <div className="relative">
-          <div className={`w-44 h-44 rounded-full overflow-hidden border-4 border-purple-600 shadow-2xl shadow-purple-900/50 ${audioPlaying ? "vinyl-spin" : ""}`}>
+          <div className={`w-44 h-44 rounded-full overflow-hidden border-4 border-purple-600 shadow-2xl shadow-purple-900/50 ${room.playingStartedAt && progress > 0 ? "vinyl-spin" : ""}`}>
             {track.albumCover ? (
               <Image src={track.albumCover} alt={track.name} fill className="object-cover" />
             ) : (
@@ -135,60 +137,68 @@ export default function PlayingPhase() {
         {!track.previewUrl && <p className="text-orange-400 text-sm">Pas d&apos;extrait disponible</p>}
       </div>
 
-      {/* Vote section */}
-      <div className="w-full max-w-sm">
-        <h3 className="text-center font-semibold text-gray-400 mb-3 text-xs uppercase tracking-wider">
-          Qui a mis ce son ?
-        </h3>
-        <div className="grid grid-cols-2 gap-2">
-          {room.players.map((p) => {
-            const isSelf = p.id === playerId;
-            const locked = !!myVote;
-            const disabled = (!room.settings.allowSelfVote && isSelf) || locked;
-            const isPending = !locked && pendingVote === p.id;
-            const isConfirmed = myVote === p.id;
-            const voteCount = room.voteCounts[p.id] ?? 0;
+      <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2">
+          {/* Vote section */}
+          <div className="w-full max-w-2xl">
+            <h3 className="text-center font-semibold text-gray-400 mb-3 text-xs uppercase tracking-wider">
+              Qui a mis ce son ?
+            </h3>
+            <div className="grid grid-cols-2 gap-2">
+              {room.players.map((p) => {
+                const isSelf = p.id === playerId;
+                const locked = !!myVote;
+                const disabled = (!room.settings.allowSelfVote && isSelf) || locked;
+                const isPending = !locked && pendingVote === p.id;
+                const isConfirmed = myVote === p.id;
+                const voteCount = room.voteCounts[p.id] ?? 0;
 
-            return (
-              <button key={p.id} onClick={() => !disabled && handleVoteClick(p.id)}
-                disabled={disabled}
-                className={`relative flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm border-2 transition-all
-                  ${isPending ? "border-purple-500 bg-purple-900/40 text-purple-200" : isConfirmed ? "border-green-500 bg-green-900/30 text-green-300" : disabled ? "border-transparent opacity-30 cursor-not-allowed" : "border-transparent hover:border-purple-500/50 cursor-pointer"}`}
-                style={{ background: isPending || isConfirmed ? undefined : "var(--surface)" }}>
-                <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 bg-gray-700">
-                  {p.avatar ? <img src={p.avatar} alt={p.name} className="w-full h-full object-cover" /> : null}
-                </div>
-                <span className="flex-1 truncate font-medium text-left">{p.name}</span>
-                {voteCount > 0 && (
-                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-purple-700 text-white text-xs flex items-center justify-center font-bold">
-                    {voteCount}
-                  </span>
-                )}
+                return (
+                  <button key={p.id} onClick={() => !disabled && handleVoteClick(p.id)}
+                    disabled={disabled}
+                    className={`relative flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm border-2 transition-all
+                      ${isPending ? "border-purple-500 bg-purple-900/40 text-purple-200" : isConfirmed ? "border-green-500 bg-green-900/30 text-green-300" : disabled ? "border-transparent opacity-30 cursor-not-allowed" : "border-transparent hover:border-purple-500/50 cursor-pointer"}`}
+                    style={{ background: isPending || isConfirmed ? undefined : "var(--surface)" }}>
+                    <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 bg-gray-700">
+                      {p.avatar ? <img src={p.avatar} alt={p.name} className="w-full h-full object-cover" /> : null}
+                    </div>
+                    <span className="flex-1 truncate font-medium text-left">{p.name}</span>
+                    {voteCount > 0 && (
+                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-purple-700 text-white text-xs flex items-center justify-center font-bold">
+                        {voteCount}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+              <span>{room.votedPlayerIds.length}/{room.players.length} ont voté</span>
+            </div>
+
+            {myVote ? (
+              <p className="text-center text-green-400 text-xs mt-3 flex items-center justify-center gap-1">
+                <Check size={12} /> Vote verrouillé
+              </p>
+            ) : pendingVote ? (
+              <button onClick={confirmVote}
+                className="w-full mt-3 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 bg-purple-600 hover:bg-purple-500 text-white">
+                Confirmer mon vote
               </button>
-            );
-          })}
+            ) : null}
+
+            {isHost && (
+              <button onClick={forceReveal}
+                className="w-full mt-2 py-2 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 transition-colors">
+                <Eye size={12} /> Révéler maintenant
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
-          <span>{room.votedPlayerIds.length}/{room.players.length} ont voté</span>
-        </div>
-
-        {myVote ? (
-          <p className="text-center text-green-400 text-xs mt-3 flex items-center justify-center gap-1">
-            <Check size={12} /> Vote verrouillé
-          </p>
-        ) : pendingVote ? (
-          <button onClick={confirmVote}
-            className="w-full mt-3 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 bg-purple-600 hover:bg-purple-500 text-white">
-            Confirmer mon vote
-          </button>
-        ) : null}
-
-        {isHost && (
-          <button onClick={forceReveal}
-            className="w-full mt-2 py-2 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 transition-colors">
-            <Eye size={12} /> Révéler maintenant
-          </button>
+        {chatEnabled && (
+          <ChatPanel className="h-[28rem]" />
         )}
       </div>
     </div>

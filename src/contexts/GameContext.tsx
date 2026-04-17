@@ -30,6 +30,8 @@ interface GameContextType {
   clearError: () => void;
   createRoom: (playerName: string, avatar: string) => Promise<string | null>;
   joinRoom: (roomCode: string, playerName: string, avatar: string) => Promise<string | null>;
+  leaveRoom: () => Promise<void>;
+  sendChat: (text: string) => Promise<void>;
   addTrack: (track: Omit<Track, "addedBy">) => void;
   removeTrack: (trackId: string) => void;
   setReady: (ready: boolean) => void;
@@ -74,31 +76,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!roomCode) return;
 
-    const applyRoomDB = (newRoom: RoomDB) => {
-      // If this player is no longer in the room, they were kicked
-      const stillInRoom = newRoom.players.some((p) => p.id === playerId);
-      if (!stillInRoom) {
-        setRoomCode(null);
-        setRoom(null);
-        return;
-      }
-      const sanitized = sanitizeRoom(newRoom, playerId);
-      setRoom(sanitized);
-      if (
-        newRoom.playing_started_at &&
-        newRoom.playing_started_at !== prevPlayingStartedAt.current
-      ) {
-        prevPlayingStartedAt.current = newRoom.playing_started_at;
-        setAudioSignal((n) => n + 1);
-      }
-    };
-
     const fetchRoom = () =>
       fetch(`/api/rooms/${roomCode}?playerId=${encodeURIComponent(playerId)}`)
         .then((r) => r.json())
         .then(({ room: r }: { room: ClientRoom | null }) => {
           if (!r) return;
-          // If this player is not in the room anymore, they were kicked
           if (!r.players.some((p) => p.id === playerId)) {
             setRoomCode(null);
             setRoom(null);
@@ -107,6 +89,33 @@ export function GameProvider({ children }: { children: ReactNode }) {
           setRoom(r);
         })
         .catch(() => {});
+
+    const applyRoomDB = (newRoom: RoomDB) => {
+      // Detect audio signal first — this field is small, usually present even in truncated payloads
+      if (
+        newRoom.playing_started_at &&
+        newRoom.playing_started_at !== prevPlayingStartedAt.current
+      ) {
+        prevPlayingStartedAt.current = newRoom.playing_started_at;
+        setAudioSignal((n) => n + 1);
+      }
+
+      const players = Array.isArray(newRoom?.players) ? newRoom.players : null;
+
+      if (players === null || players.length === 0) {
+        // Partial/truncated Realtime payload — re-fetch immediately for complete state
+        fetchRoom();
+        return;
+      }
+
+      if (!players.some((p) => p.id === playerId)) {
+        setRoomCode(null);
+        setRoom(null);
+        return;
+      }
+
+      setRoom(sanitizeRoom(newRoom, playerId));
+    };
 
     // Initial fetch
     fetchRoom();
@@ -121,8 +130,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       )
       .subscribe();
 
-    // Polling fallback every 4s (catches Realtime misses)
-    const poll = setInterval(fetchRoom, 4000);
+    // Polling fallback every 2s for reliable sync
+    const poll = setInterval(fetchRoom, 2000);
 
     return () => {
       supabase.removeChannel(channel);
@@ -224,10 +233,33 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const kickPlayer = useCallback((targetId: string) => action("kick-player", { targetId }), [action]);
   const clearError = useCallback(() => setError(null), []);
 
+  const sendChat = useCallback(
+    async (text: string) => {
+      await action("send-chat", { text });
+    },
+    [action]
+  );
+
+  const leaveRoom = useCallback(async () => {
+    if (!roomCode) {
+      setRoom(null);
+      setRoomCode(null);
+      return;
+    }
+    try {
+      // Ask server to remove us from the room (and possibly transfer host)
+      await action("leave-room");
+    } finally {
+      // Always clear local state so UI returns home
+      setRoom(null);
+      setRoomCode(null);
+    }
+  }, [action, roomCode, setRoomCode]);
+
   return (
     <GameContext.Provider value={{
       room, playerId, roomCode, error, audioSignal,
-      clearError, createRoom, joinRoom, addTrack, removeTrack, setReady,
+      clearError, createRoom, joinRoom, leaveRoom, sendChat, addTrack, removeTrack, setReady,
       startSelection, startModeSelection, setPlaybackMode, setSettings,
       startGame, hostStartMusic, transitionToVoting,
       castVote, forceReveal, nextRound, playAgain, kickPlayer,

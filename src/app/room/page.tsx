@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useGame } from "@/contexts/GameContext";
 import { Copy, Check, Disc3, Music, LogOut } from "lucide-react";
+import ConfirmModal from "@/components/ConfirmModal";
 import Lobby from "@/components/Lobby";
 import Selection from "@/components/Selection";
 import ModeSelection from "@/components/ModeSelection";
@@ -14,9 +15,11 @@ import EndScreen from "@/components/EndScreen";
 
 export default function RoomPage() {
   const router = useRouter();
-  const { room, playerId, roomCode, error } = useGame();
+  const { room, playerId, roomCode, error, leaveRoom } = useGame();
   const [codeBlurred, setCodeBlurred] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   // Auto-blur code when game leaves lobby
   useEffect(() => {
@@ -104,8 +107,9 @@ export default function RoomPage() {
           )}
 
           <button
-            onClick={() => { sessionStorage.removeItem("kiekoutsa_room_code"); router.push("/"); }}
-            className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 transition-colors"
+            onClick={() => setConfirmOpen(true)}
+            disabled={leaving}
+            className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
             title="Quitter le salon"
           >
@@ -113,6 +117,28 @@ export default function RoomPage() {
           </button>
         </div>
       </div>
+
+      <ConfirmModal
+        open={confirmOpen}
+        title="Quitter le salon ?"
+        message="Tu vas être retiré du salon. Si tu es host, le rôle sera transféré à un autre joueur."
+        confirmText="Quitter"
+        cancelText="Rester"
+        destructive
+        loading={leaving}
+        onCancel={() => !leaving && setConfirmOpen(false)}
+        onConfirm={async () => {
+          if (leaving) return;
+          setLeaving(true);
+          try {
+            await leaveRoom();
+            router.push("/");
+          } finally {
+            setLeaving(false);
+            setConfirmOpen(false);
+          }
+        }}
+      />
 
       {/* Phase content */}
       <div className="flex-1 flex flex-col overflow-y-auto">
