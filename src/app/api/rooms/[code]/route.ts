@@ -12,12 +12,7 @@ export async function GET(
   if (!playerId) return NextResponse.json({ error: "playerId requis" }, { status: 400 });
 
   const sb = createServerSupabase();
-  const { data, error } = await sb
-    .from("rooms")
-    .select("*")
-    .eq("code", code.toUpperCase())
-    .single();
-
+  const { data, error } = await sb.from("rooms").select("*").eq("code", code.toUpperCase()).single();
   if (error || !data) return NextResponse.json({ error: "Salon introuvable" }, { status: 404 });
 
   return NextResponse.json({ room: sanitizeRoom(data as RoomDB, playerId) });

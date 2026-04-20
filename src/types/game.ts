@@ -2,6 +2,7 @@ import type { ChatMessage } from "@/types/chat";
 
 export type GamePhase =
   | "lobby"
+  | "role-reveal"
   | "selection"
   | "mode-selection"
   | "playing"
@@ -22,8 +23,10 @@ export interface RoomSettings {
   anonymousVotes: boolean;
   showVoteCounts: boolean;
   showAllTracksEnd: boolean;
-  taupeMode: boolean;
-  rolesEnabled: boolean;
+  gameMode: "basique" | "taupe";
+  enabledRoles: RoleName[];
+  policeBlocksPerGame: number;
+  fouActivationsPerGame: number;
 }
 
 export const DEFAULT_SETTINGS: RoomSettings = {
@@ -35,8 +38,10 @@ export const DEFAULT_SETTINGS: RoomSettings = {
   anonymousVotes: false,
   showVoteCounts: false,
   showAllTracksEnd: false,
-  taupeMode: false,
-  rolesEnabled: false,
+  gameMode: "basique",
+  enabledRoles: [],
+  policeBlocksPerGame: 1,
+  fouActivationsPerGame: 1,
 };
 
 export interface Track {
@@ -107,6 +112,10 @@ export interface ClientRoom {
   fouActivated: boolean;
   guesserPickId: string | null;
   allRoles: Record<string, RoleName> | null;
+  policeBlocksUsed: number;
+  fouActivationsUsed: number;
+  updatedAt: string;
+  guesserPick: { id: string; name: string; artists: string; albumCover: string } | null;
 }
 
 export interface SpotifyTrack {

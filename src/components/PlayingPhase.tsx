@@ -2,20 +2,21 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { Play, Eye, Check } from "lucide-react";
+import { Play, Eye, Check, Shield, Zap } from "lucide-react";
 import { useGame } from "@/contexts/GameContext";
 import ChatPanel from "@/components/ChatPanel";
+import type { RoleName } from "@/types/game";
 
 export default function PlayingPhase() {
-  const { room, playerId, audioSignal, castVote, forceReveal, hostStartMusic, transitionToVoting } = useGame();
+  const { room, playerId, audioSignal, castVote, forceReveal, hostStartMusic, transitionToVoting, policeBlock, fouActivate } = useGame();
   const audioElRef = useRef<HTMLAudioElement>(null);
   const [progress, setProgress] = useState(100);
   const [, setAudioPlaying] = useState(false);
   const progressRef = useRef<NodeJS.Timeout | null>(null);
   const hostTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Pending vote (not yet confirmed to server)
   const [pendingVote, setPendingVote] = useState<string | null>(null);
+  const [showPoliceSelect, setShowPoliceSelect] = useState(false);
 
   if (!room || !room.currentTrack) return null;
 
@@ -25,6 +26,18 @@ export default function PlayingPhase() {
   const shouldPlayAudio =
     room.playbackMode === "sync" ||
     (room.playbackMode === "master" && isHost);
+
+  const cachedRole = typeof window !== "undefined"
+    ? sessionStorage.getItem("kiekoutsa_my_role") as RoleName | null
+    : null;
+  const effectiveRole = room.myRole ?? cachedRole;
+  const isPolicier = effectiveRole === "policier";
+  const isFou = effectiveRole === "fou";
+  const isBlocked = room.policeBlockedId === playerId;
+  const blocksRemaining = (room.settings.policeBlocksPerGame ?? 1) - (room.policeBlocksUsed ?? 0);
+  const canPoliceBlock = isPolicier && !room.policeBlockedId && blocksRemaining > 0;
+  const fouActivationsRemaining = (room.settings.fouActivationsPerGame ?? 1) - (room.fouActivationsUsed ?? 0);
+  const canFouActivate = isFou && !room.fouActivated && track.addedBy !== playerId && fouActivationsRemaining > 0;
   const chatEnabled = true;
 
   // Reset pending vote on new track
@@ -53,7 +66,7 @@ export default function PlayingPhase() {
       audio.volume = 1.0;
       audio.currentTime = Math.min(elapsed, 29);
       audio.load();
-      audio.play().then(() => setAudioPlaying(true)).catch(console.error);
+      audio.play().then(() => setAudioPlaying(true)).catch(() => {});
     }
 
     // Progress bar tick
@@ -87,8 +100,6 @@ export default function PlayingPhase() {
   const confirmVote = () => {
     if (pendingVote) castVote(pendingVote);
   };
-
-  const pendingChanged = pendingVote !== null && pendingVote !== myVote;
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6 gap-6 max-w-5xl mx-auto w-full">
@@ -144,10 +155,16 @@ export default function PlayingPhase() {
             <h3 className="text-center font-semibold text-gray-400 mb-3 text-xs uppercase tracking-wider">
               Qui a mis ce son ?
             </h3>
+            {isBlocked && (
+              <div className="mb-3 px-4 py-2 rounded-xl bg-red-900/30 border border-red-600 text-red-300 text-sm text-center font-semibold">
+                Tu as été bloqué par le Policier — tu ne peux pas voter ce round
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-2">
               {room.players.map((p) => {
                 const isSelf = p.id === playerId;
-                const locked = !!myVote;
+                const locked = !!myVote || isBlocked;
                 const disabled = (!room.settings.allowSelfVote && isSelf) || locked;
                 const isPending = !locked && pendingVote === p.id;
                 const isConfirmed = myVote === p.id;
@@ -181,7 +198,7 @@ export default function PlayingPhase() {
               <p className="text-center text-green-400 text-xs mt-3 flex items-center justify-center gap-1">
                 <Check size={12} /> Vote verrouillé
               </p>
-            ) : pendingVote ? (
+            ) : isBlocked ? null : pendingVote ? (
               <button onClick={confirmVote}
                 className="w-full mt-3 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 bg-purple-600 hover:bg-purple-500 text-white">
                 Confirmer mon vote
@@ -193,6 +210,53 @@ export default function PlayingPhase() {
                 className="w-full mt-2 py-2 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-gray-400 transition-colors">
                 <Eye size={12} /> Révéler maintenant
               </button>
+            )}
+
+            {/* Policier power */}
+            {canPoliceBlock && (
+              <div className="mt-3">
+                {showPoliceSelect ? (
+                  <div className="rounded-xl p-3" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+                    <p className="text-xs font-semibold text-blue-300 mb-2">Choisir un joueur à bloquer :</p>
+                    <div className="space-y-1">
+                      {room.players.filter((p) => p.id !== playerId && !room.votedPlayerIds.includes(p.id)).map((p) => (
+                        <button key={p.id} onClick={() => { policeBlock(p.id); setShowPoliceSelect(false); }}
+                          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 transition-colors text-left text-xs">
+                          <div className="w-5 h-5 rounded-full overflow-hidden bg-gray-700 flex-shrink-0">
+                            {p.avatar ? <img src={p.avatar} alt={p.name} className="w-full h-full object-cover" /> : null}
+                          </div>
+                          {p.name}
+                        </button>
+                      ))}
+                    </div>
+                    <button onClick={() => setShowPoliceSelect(false)} className="mt-1 text-xs text-gray-500 hover:text-gray-300">Annuler</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setShowPoliceSelect(true)}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm bg-blue-800 hover:bg-blue-700 text-blue-200 transition-all active:scale-95">
+                    <Shield size={14} /> Bloquer un joueur
+                    <span className="text-xs opacity-70">({blocksRemaining} restant{blocksRemaining > 1 ? "s" : ""})</span>
+                  </button>
+                )}
+              </div>
+            )}
+            {isPolicier && room.policeBlockedId && (
+              <p className="text-xs text-blue-300 flex items-center gap-1.5 mt-2">
+                <Shield size={12} /> Bloqué : {room.players.find((p) => p.id === room.policeBlockedId)?.name ?? "?"}
+              </p>
+            )}
+
+            {/* Fou power */}
+            {canFouActivate && (
+              <button onClick={() => fouActivate()}
+                className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm bg-yellow-800 hover:bg-yellow-700 text-yellow-200 transition-all active:scale-95">
+                <Zap size={14} /> Activer mon pouvoir
+              </button>
+            )}
+            {isFou && room.fouActivated && (
+              <p className="text-xs text-yellow-300 flex items-center gap-1.5 mt-2">
+                <Zap size={12} /> Ton pouvoir est actif ce round !
+              </p>
             )}
           </div>
         </div>

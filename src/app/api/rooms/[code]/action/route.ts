@@ -35,10 +35,11 @@ export async function POST(
     }
     const upd = (result as { update: Partial<RoomDB> }).update;
     if (Object.keys(upd).length > 0) {
-      await sb.from("rooms").update(upd).eq("code", code.toUpperCase());
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: updated } = await (sb.from("rooms") as any).update(upd).eq("code", code.toUpperCase()).select().single();
+      return NextResponse.json({ room: updated ? sanitizeRoom(updated as RoomDB, playerId) : null });
     }
-    const { data: updated } = await sb.from("rooms").select("*").eq("code", code.toUpperCase()).single();
-    return NextResponse.json({ room: sanitizeRoom(updated as RoomDB, playerId) });
+    return NextResponse.json({ room: sanitizeRoom(room, playerId) });
   }
 
   const result = applyAction(room, action, playerId, payload ?? {});
@@ -52,7 +53,7 @@ export async function POST(
   let finalUpd = { ...upd };
 
   // Taupe mode post-processing after start-game
-  if (action === "start-game" && room.settings?.taupeMode) {
+  if (action === "start-game" && room.settings?.gameMode === "taupe") {
     try {
       const queue = (finalUpd.track_queue ?? []) as Track[];
       const firstArtist = queue[0]?.artists ?? "";
@@ -104,23 +105,20 @@ export async function POST(
   }
 
   if (Object.keys(finalUpd).length > 0) {
-    const { error: updateError } = await sb
-      .from("rooms")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: updated, error: updateError } = await (sb.from("rooms") as any)
       .update(finalUpd)
-      .eq("code", code.toUpperCase());
+      .eq("code", code.toUpperCase())
+      .select()
+      .single();
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
+    return NextResponse.json({
+      ok: true,
+      room: updated ? sanitizeRoom(updated as RoomDB, playerId) : null,
+    });
   }
 
-  const { data: updated } = await sb
-    .from("rooms")
-    .select("*")
-    .eq("code", code.toUpperCase())
-    .single();
-
-  return NextResponse.json({
-    ok: true,
-    room: updated ? sanitizeRoom(updated as RoomDB, playerId) : null,
-  });
+  return NextResponse.json({ ok: true, room: sanitizeRoom(room, playerId) });
 }

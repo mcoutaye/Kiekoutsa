@@ -134,7 +134,18 @@ export default function Selection() {
           <div className="rounded-2xl p-4" style={{ background: "var(--surface)", border: "1px solid #4ade80" }}>
             <h3 className="font-bold mb-1 text-sm uppercase tracking-wider text-green-400">Rôle : Guesser</h3>
             <p className="text-xs text-gray-400 mb-3">Choisis un son que tu penses qu&apos;un autre joueur va ajouter. Si tu as raison → +10 pts et le round saute le vote !</p>
-            {guesserPickDone ? (
+            {guesserPickDone && room.guesserPick ? (
+              <div className="flex items-center gap-3 px-3 py-2 rounded-lg" style={{ background: "var(--bg)" }}>
+                {room.guesserPick.albumCover ? (
+                  <img src={room.guesserPick.albumCover} alt="" className="w-10 h-10 rounded flex-shrink-0 object-cover" />
+                ) : <div className="w-10 h-10 rounded bg-gray-800 flex-shrink-0" />}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-green-400 mb-0.5">✓ Prédiction</p>
+                  <p className="text-sm font-medium truncate text-white">{room.guesserPick.name}</p>
+                  <p className="text-xs text-gray-500 truncate">{room.guesserPick.artists}</p>
+                </div>
+              </div>
+            ) : guesserPickDone ? (
               <p className="text-green-400 text-sm font-semibold text-center py-2">✓ Prédiction enregistrée !</p>
             ) : (
               <div className="space-y-1 max-h-48 overflow-y-auto">

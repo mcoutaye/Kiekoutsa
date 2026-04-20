@@ -33,7 +33,9 @@ export interface RoomDB {
   taupe_player_id: string | null;
   guesser_pick: Track | null;
   police_blocked_id: string | null;
+  police_blocks_used: number;
   fou_activated: boolean;
+  fou_activations_used: number;
   roles: Record<string, string> | null;
 }
 
@@ -98,8 +100,10 @@ export function sanitizeRoom(room: RoomDB, myPlayerId: string): ClientRoom {
   const myRole = roles?.[myPlayerId] as RoleName ?? null;
   const guesserPick = (room as any).guesser_pick as Track | null ?? null;
 
-  const guesserPickId = (myRole === "guesser" || room.phase === "end")
-    ? guesserPick?.id ?? null
+  const canSeeGuesserPick = myRole === "guesser" || room.phase === "end" || room.phase === "reveal";
+  const guesserPickId = canSeeGuesserPick ? guesserPick?.id ?? null : null;
+  const guesserPickInfo = myRole === "guesser" && guesserPick
+    ? { id: String(guesserPick.id), name: guesserPick.name, artists: guesserPick.artists, albumCover: guesserPick.albumCover ?? "" }
     : null;
 
   const allRoles: Record<string, RoleName> | null = room.phase === "end" && roles
@@ -136,6 +140,10 @@ export function sanitizeRoom(room: RoomDB, myPlayerId: string): ClientRoom {
     fouActivated: (room as any).fou_activated ?? false,
     guesserPickId,
     allRoles,
+    policeBlocksUsed: (room as any).police_blocks_used ?? 0,
+    fouActivationsUsed: (room as any).fou_activations_used ?? 0,
+    updatedAt: room.updated_at ?? "",
+    guesserPick: guesserPickInfo,
   };
 }
 
@@ -214,6 +222,9 @@ export function applyAction(
       const s = { ...DEFAULT_SETTINGS, ...room.settings, ...payload } as RoomSettings;
       s.minTracks = Math.max(1, Math.min(5, s.minTracks));
       s.maxTracks = Math.max(s.minTracks, Math.min(10, s.maxTracks));
+      if (!Array.isArray(s.enabledRoles)) s.enabledRoles = [];
+      s.policeBlocksPerGame = Math.max(1, Math.min(5, s.policeBlocksPerGame ?? 1));
+      s.fouActivationsPerGame = Math.max(1, Math.min(5, s.fouActivationsPerGame ?? 1));
       return { update: { settings: s, updated_at: now } };
     }
 
@@ -222,6 +233,10 @@ export function applyAction(
       if (player.tracks.length >= room.settings.maxTracks)
         return { error: `Maximum ${room.settings.maxTracks} musiques` };
       if (player.tracks.find((t) => t.id === payload.id)) return { update: {} };
+      const guesserPick = (room as any).guesser_pick as Track | null ?? null;
+      const roles = (room as any).roles as Record<string, string> | null ?? null;
+      if (roles?.[playerId] === "guesser" && guesserPick && String(payload.id) === String(guesserPick.id))
+        return { error: "Tu ne peux pas ajouter ta musique de prédiction à ta sélection" };
       player.tracks.push({ ...payload, addedBy: playerId });
       return { update: { players: [...room.players], updated_at: now } };
     }
@@ -253,7 +268,36 @@ export function applyAction(
       if (!isHost) return { error: "Non autorisé" };
       if (room.players.length < 3) return { error: "Il faut au moins 3 joueurs" };
       const reset = room.players.map((p) => ({ ...p, is_ready: false, tracks: [] }));
-      return { update: { phase: "selection", players: reset, updated_at: now } };
+
+      const enabledRoles = room.settings.enabledRoles ?? [];
+      let roles: Record<string, string> | null = null;
+      if (enabledRoles.length > 0) {
+        const playerIds = shuffleArray(room.players.map((p) => p.id));
+        roles = {};
+        enabledRoles.forEach((roleName, idx) => {
+          if (idx < playerIds.length) roles![playerIds[idx]] = roleName;
+        });
+        playerIds.slice(enabledRoles.length).forEach((pid) => {
+          roles![pid] = "none";
+        });
+      }
+
+      const nextPhase: GamePhase = enabledRoles.length > 0 ? "role-reveal" : "selection";
+      return {
+        update: {
+          phase: nextPhase,
+          players: reset,
+          roles,
+          guesser_pick: null,
+          police_blocks_used: 0,
+          updated_at: now,
+        },
+      };
+    }
+
+    case "start-selection-confirmed": {
+      if (!isHost || room.phase !== "role-reveal") return { error: "Non autorisé" };
+      return { update: { phase: "selection", updated_at: now } };
     }
 
     case "start-mode-selection": {
@@ -275,16 +319,6 @@ export function applyAction(
       const firstTrack = queue[0] ?? null;
       const startedAt = room.settings.autoPlay ? now : null;
 
-      let roles: Record<string, string> | null = null;
-      if (room.settings.rolesEnabled && room.players.length >= 3) {
-        const playerIds = shuffleArray(room.players.map((p) => p.id));
-        roles = {};
-        const roleNames = ["guesser", "policier", "fou"];
-        playerIds.forEach((pid, idx) => {
-          roles![pid] = roleNames[idx] ?? "none";
-        });
-      }
-
       return {
         update: {
           track_queue: queue,
@@ -296,9 +330,11 @@ export function applyAction(
           playing_started_at: startedAt,
           taupe_player_id: null,
           police_blocked_id: null,
+          police_blocks_used: 0,
           fou_activated: false,
-          guesser_pick: null,
-          roles,
+          // Explicitly preserve roles and guesser_pick set during start-selection
+          roles: room.roles ?? null,
+          guesser_pick: room.guesser_pick ?? null,
           updated_at: now,
         },
       };
@@ -311,11 +347,10 @@ export function applyAction(
 
     case "transition-to-voting": {
       if (!isHost || room.phase !== "playing") return { update: {} };
-      const guesserPick = (room as any).guesser_pick as Track | null ?? null;
-      if (guesserPick && room.current_track?.id === guesserPick.id) {
-        return { update: { ...computeGuesserReveal(room), updated_at: now } };
+      if (isGuesserTrack(room)) {
+        return { update: { ...computeGuesserReveal(room), roles: room.roles ?? null, current_track: room.current_track, current_track_index: room.current_track_index, updated_at: now } };
       }
-      return { update: { phase: "voting", updated_at: now } };
+      return { update: { phase: "voting", roles: room.roles ?? null, guesser_pick: room.guesser_pick ?? null, updated_at: now } };
     }
 
     case "cast-vote": {
@@ -327,6 +362,10 @@ export function applyAction(
 
       const policeBlockedId = (room as any).police_blocked_id as string | null ?? null;
       if (policeBlockedId === playerId) return { error: "Tu es bloqué par le policier ce round" };
+
+      const voteRoles = (room as any).roles as Record<string, string> | null ?? null;
+      if (voteRoles?.[playerId] === "fou" && payload.suspectedPlayerId === playerId)
+        return { error: "Le Fou ne peut pas voter pour lui-même" };
 
       const allPlayers = [...room.players];
       const taupePlayerId = (room as any).taupe_player_id as string | null ?? null;
@@ -345,21 +384,27 @@ export function applyAction(
       const allVoted = votingPlayerIds.every((pid) => newVotes[pid] !== undefined);
 
       if (allVoted && room.settings.autoReveal) {
-        return { update: { votes: newVotes, ...computeReveal(room, newVotes), updated_at: now } };
+        if (isGuesserTrack(room)) {
+          return { update: { votes: newVotes, ...computeGuesserReveal(room), roles: room.roles ?? null, current_track: room.current_track, current_track_index: room.current_track_index, updated_at: now } };
+        }
+        return { update: { votes: newVotes, ...computeReveal(room, newVotes), roles: room.roles ?? null, updated_at: now } };
       }
       return { update: { votes: newVotes, updated_at: now } };
     }
 
     case "force-reveal": {
       if (!isHost) return { error: "Non autorisé" };
-      return { update: { ...computeReveal(room, room.votes), updated_at: now } };
+      if (isGuesserTrack(room)) {
+        return { update: { ...computeGuesserReveal(room), roles: room.roles ?? null, current_track: room.current_track, current_track_index: room.current_track_index, updated_at: now } };
+      }
+      return { update: { ...computeReveal(room, room.votes), roles: room.roles ?? null, updated_at: now } };
     }
 
     case "next-round": {
       if (!isHost || room.phase !== "reveal") return { error: "Non autorisé" };
       const nextIdx = room.current_track_index + 1;
       if (nextIdx >= room.track_queue.length) {
-        return { update: { phase: "end", updated_at: now } };
+        return { update: { phase: "end", roles: room.roles ?? null, updated_at: now } };
       }
       const nextTrack = room.track_queue[nextIdx];
       const startedAt = room.settings.autoPlay ? now : null;
@@ -372,6 +417,8 @@ export function applyAction(
           police_blocked_id: null,
           fou_activated: false,
           playing_started_at: startedAt,
+          roles: room.roles ?? null,
+          guesser_pick: room.guesser_pick ?? null,
           updated_at: now,
         },
       };
@@ -386,7 +433,7 @@ export function applyAction(
           track_queue: [], current_track_index: -1, current_track: null,
           votes: {}, round_results: [], chat_messages: [], playing_started_at: null,
           roles: null, taupe_player_id: null, guesser_pick: null,
-          police_blocked_id: null, fou_activated: false,
+          police_blocked_id: null, police_blocks_used: 0, fou_activated: false, fou_activations_used: 0,
           updated_at: now,
         },
       };
@@ -397,7 +444,8 @@ export function applyAction(
       const roles = (room as any).roles as Record<string, string> | null ?? null;
       if (roles?.[playerId] !== "guesser") return { error: "Tu n'es pas le Guesser" };
       const track = payload as Track;
-      if (player.tracks.find((t) => t.id === track.id)) return { error: "Ce track est déjà dans ta sélection" };
+      if (player.tracks.find((t) => String(t.id) === String(track.id)))
+        return { error: "Tu ne peux pas prédire un son que tu as déjà ajouté à ta sélection" };
       return { update: { guesser_pick: { ...track, addedBy: playerId }, updated_at: now } };
     }
 
@@ -406,23 +454,39 @@ export function applyAction(
       if (!player) return { error: "Non autorisé" };
       const roles = (room as any).roles as Record<string, string> | null ?? null;
       if (roles?.[playerId] !== "policier") return { error: "Tu n'es pas le Policier" };
+      if ((room as any).police_blocked_id) return { error: "Tu as déjà bloqué ce round" };
+      const blocksUsed = (room as any).police_blocks_used as number ?? 0;
+      const blocksAllowed = room.settings.policeBlocksPerGame ?? 1;
+      if (blocksUsed >= blocksAllowed) return { error: "Tu as épuisé tous tes blocages" };
       const targetId = payload.targetId as string;
       if (!room.players.find((p) => p.id === targetId)) return { error: "Joueur cible introuvable" };
-      return { update: { police_blocked_id: targetId, updated_at: now } };
+      if (room.votes && room.votes[targetId] !== undefined) return { error: "Ce joueur a déjà voté" };
+      return { update: { police_blocked_id: targetId, police_blocks_used: blocksUsed + 1, updated_at: now } };
     }
 
     case "fou-activate": {
       if (room.phase !== "playing" && room.phase !== "voting") return { error: "Non autorisé" };
       if (!player) return { error: "Non autorisé" };
-      const roles = (room as any).roles as Record<string, string> | null ?? null;
-      if (roles?.[playerId] !== "fou") return { error: "Tu n'es pas le Fou" };
+      const fouRoles = (room as any).roles as Record<string, string> | null ?? null;
+      if (fouRoles?.[playerId] !== "fou") return { error: "Tu n'es pas le Fou" };
+      if ((room as any).fou_activated) return { error: "Pouvoir déjà actif ce round" };
       if (room.current_track?.addedBy === playerId) return { error: "Ce n'est pas ta musique" };
-      return { update: { fou_activated: true, updated_at: now } };
+      const fouUsed = (room as any).fou_activations_used as number ?? 0;
+      const fouAllowed = room.settings.fouActivationsPerGame ?? 1;
+      if (fouUsed >= fouAllowed) return { error: "Tu as épuisé toutes tes activations" };
+      return { update: { fou_activated: true, fou_activations_used: fouUsed + 1, updated_at: now } };
     }
 
     default:
       return { error: `Action inconnue: ${action}` };
   }
+}
+
+function isGuesserTrack(room: RoomDB): boolean {
+  const pick = (room as any).guesser_pick as Track | null ?? null;
+  const currentId = room.current_track?.id ? String(room.current_track.id) : null;
+  const pickId = pick?.id ? String(pick.id) : null;
+  return !!(currentId && pickId && currentId === pickId);
 }
 
 function computeGuesserReveal(room: RoomDB): Partial<RoomDB> {

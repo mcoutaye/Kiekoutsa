@@ -7,7 +7,7 @@ import { useGame } from "@/contexts/GameContext";
 import ChatPanel from "@/components/ChatPanel";
 
 export default function VotingPhase() {
-  const { room, playerId, castVote, forceReveal, policeBlock, fouActivate } = useGame();
+  const { room, playerId, castVote, forceReveal, policeBlock, fouActivate, error, clearError } = useGame();
   const [pendingVote, setPendingVote] = useState<string | null>(null);
   const [showPoliceSelect, setShowPoliceSelect] = useState(false);
 
@@ -16,9 +16,19 @@ export default function VotingPhase() {
   const isHost = room.players.find((p) => p.id === playerId)?.isHost ?? false;
   const myVote = room.myVote;
   const isBlocked = room.policeBlockedId === playerId;
-  const isPolicier = room.myRole === "policier";
-  const isFou = room.myRole === "fou";
-  const canFouActivate = isFou && !room.fouActivated && room.currentTrack?.addedBy !== playerId;
+
+  // Use sessionStorage cache as fallback if Realtime stripped the roles from the payload
+  const cachedRole = typeof window !== "undefined"
+    ? sessionStorage.getItem("kiekoutsa_my_role") as import("@/types/game").RoleName | null
+    : null;
+  const effectiveRole = room.myRole ?? cachedRole;
+
+  const isPolicier = effectiveRole === "policier";
+  const isFou = effectiveRole === "fou";
+  const fouActivationsRemaining = (room.settings.fouActivationsPerGame ?? 1) - (room.fouActivationsUsed ?? 0);
+  const canFouActivate = isFou && !room.fouActivated && room.currentTrack?.addedBy !== playerId && fouActivationsRemaining > 0;
+  const blocksRemaining = (room.settings.policeBlocksPerGame ?? 1) - (room.policeBlocksUsed ?? 0);
+  const canPoliceBlock = isPolicier && !room.policeBlockedId && blocksRemaining > 0;
 
   // Sync pending with confirmed vote when it updates
   useEffect(() => {
@@ -123,13 +133,13 @@ export default function VotingPhase() {
           </div>
 
           {/* Police power */}
-          {isPolicier && !room.policeBlockedId && (
+          {canPoliceBlock && (
             <div className="w-full">
               {showPoliceSelect ? (
                 <div className="rounded-xl p-3" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
                   <p className="text-sm font-semibold text-blue-300 mb-2">Choisir un joueur à bloquer :</p>
                   <div className="space-y-1">
-                    {room.players.filter((p) => p.id !== playerId).map((p) => (
+                    {room.players.filter((p) => p.id !== playerId && !room.votedPlayerIds.includes(p.id)).map((p) => (
                       <button key={p.id} onClick={() => { policeBlock(p.id); setShowPoliceSelect(false); }}
                         className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 transition-colors text-left text-sm">
                         <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-700 flex-shrink-0">
@@ -145,9 +155,15 @@ export default function VotingPhase() {
                 <button onClick={() => setShowPoliceSelect(true)}
                   className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm bg-blue-800 hover:bg-blue-700 text-blue-200 transition-all active:scale-95">
                   <Shield size={14} /> Bloquer un joueur
+                  <span className="text-xs opacity-70">({blocksRemaining} restant{blocksRemaining > 1 ? "s" : ""})</span>
                 </button>
               )}
             </div>
+          )}
+          {isPolicier && !canPoliceBlock && blocksRemaining === 0 && !room.policeBlockedId && (
+            <p className="text-sm text-gray-500 flex items-center gap-1.5">
+              <Shield size={13} /> Tu as épuisé tous tes blocages
+            </p>
           )}
           {isPolicier && room.policeBlockedId && (
             <p className="text-sm text-blue-300 flex items-center gap-1.5">
@@ -166,6 +182,12 @@ export default function VotingPhase() {
             <p className="text-sm text-yellow-300 flex items-center gap-1.5">
               <Zap size={13} /> Ton pouvoir est actif ce round !
             </p>
+          )}
+
+          {error && (
+            <div onClick={clearError} className="w-full px-3 py-2 rounded-xl bg-red-900/30 border border-red-700 text-red-300 text-xs cursor-pointer text-center">
+              {error}
+            </div>
           )}
 
           {isHost && (

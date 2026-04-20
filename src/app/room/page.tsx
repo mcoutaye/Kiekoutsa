@@ -6,6 +6,7 @@ import { useGame } from "@/contexts/GameContext";
 import { Copy, Check, Disc3, Music, LogOut } from "lucide-react";
 import ConfirmModal from "@/components/ConfirmModal";
 import Lobby from "@/components/Lobby";
+import RoleReveal from "@/components/RoleReveal";
 import Selection from "@/components/Selection";
 import ModeSelection from "@/components/ModeSelection";
 import PlayingPhase from "@/components/PlayingPhase";
@@ -143,6 +144,7 @@ export default function RoomPage() {
       {/* Phase content */}
       <div className="flex-1 flex flex-col overflow-y-auto">
         {room.phase === "lobby" && <Lobby />}
+        {room.phase === "role-reveal" && <RoleReveal />}
         {room.phase === "selection" && <Selection />}
         {room.phase === "mode-selection" && <ModeSelection />}
         {room.phase === "playing" && <PlayingPhase />}

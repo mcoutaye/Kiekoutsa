@@ -36,6 +36,7 @@ interface GameContextType {
   removeTrack: (trackId: string) => void;
   setReady: (ready: boolean) => void;
   startSelection: () => void;
+  startSelectionConfirmed: () => void;
   startModeSelection: () => void;
   setPlaybackMode: (mode: PlaybackMode) => void;
   setSettings: (settings: Partial<RoomSettings>) => void;
@@ -89,7 +90,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
             setRoom(null);
             return;
           }
-          setRoom(r);
+          // Only apply if not older than current state
+          setRoom((prev) => {
+            if (prev?.updatedAt && r.updatedAt && r.updatedAt < prev.updatedAt) return prev;
+            return r;
+          });
         })
         .catch(() => {});
 
@@ -117,7 +122,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      setRoom(sanitizeRoom(newRoom, playerId));
+      // For reveal/end phase transitions, always fetch complete state (track_queue absent from partial payload)
+      if (newRoom.phase === "reveal" || newRoom.phase === "end") {
+        fetchRoom();
+        return;
+      }
+
+      // Ignore stale Realtime events (older updated_at than current state)
+      setRoom((prev) => {
+        if (prev?.updatedAt && newRoom.updated_at && newRoom.updated_at < prev.updatedAt) return prev;
+        return sanitizeRoom(newRoom, playerId);
+      });
     };
 
     // Initial fetch
@@ -133,8 +148,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       )
       .subscribe();
 
-    // Polling fallback every 2s for reliable sync
-    const poll = setInterval(fetchRoom, 2000);
+    // Polling fallback every 5s — Realtime handles real-time, this is just a safety net
+    const poll = setInterval(fetchRoom, 5000);
 
     return () => {
       supabase.removeChannel(channel);
@@ -223,6 +238,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const removeTrack = useCallback((trackId: string) => action("remove-track", { trackId }), [action]);
   const setReady = useCallback((ready: boolean) => action("set-ready", { ready }), [action]);
   const startSelection = useCallback(() => action("start-selection"), [action]);
+  const startSelectionConfirmed = useCallback(() => action("start-selection-confirmed"), [action]);
   const startModeSelection = useCallback(() => action("start-mode-selection"), [action]);
   const setPlaybackMode = useCallback((mode: PlaybackMode) => action("set-playback-mode", { mode }), [action]);
   const setSettings = useCallback((settings: Partial<RoomSettings>) => action("set-settings", settings), [action]);
@@ -266,7 +282,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     <GameContext.Provider value={{
       room, playerId, roomCode, error, audioSignal,
       clearError, createRoom, joinRoom, leaveRoom, sendChat, addTrack, removeTrack, setReady,
-      startSelection, startModeSelection, setPlaybackMode, setSettings,
+      startSelection, startSelectionConfirmed, startModeSelection, setPlaybackMode, setSettings,
       startGame, hostStartMusic, transitionToVoting,
       castVote, forceReveal, nextRound, playAgain, kickPlayer,
       guesserPickTrack, policeBlock, fouActivate,
