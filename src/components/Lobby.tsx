@@ -148,6 +148,10 @@ export default function Lobby() {
                 { key: "autoPlay", label: "Lancer la musique automatiquement" },
                 { key: "allowSelfVote", label: "Voter pour soi-même" },
                 { key: "anonymousVotes", label: "Votes anonymes (cache qui a voté pour qui)" },
+                { key: "showVoteCounts", label: "Montrer les compteurs de votes pendant le vote" },
+                { key: "showAllTracksEnd", label: "Montrer toutes les musiques à la fin" },
+                { key: "taupeMode", label: "Mode Taupe (joueur IA mystère)" },
+                { key: "rolesEnabled", label: "Rôles secrets (Fou, Policier, Guesser)" },
               ].map(({ key, label }) => (
                 <div key={key} className="flex items-center justify-between gap-3">
                   <span className="text-xs text-gray-300">{label}</span>

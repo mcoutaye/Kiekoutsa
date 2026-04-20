@@ -47,6 +47,9 @@ interface GameContextType {
   nextRound: () => void;
   playAgain: () => void;
   kickPlayer: (targetId: string) => void;
+  guesserPickTrack: (track: Track) => void;
+  policeBlock: (targetId: string) => void;
+  fouActivate: () => void;
 }
 
 const GameContext = createContext<GameContextType | null>(null);
@@ -231,6 +234,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const nextRound = useCallback(() => action("next-round"), [action]);
   const playAgain = useCallback(() => action("play-again"), [action]);
   const kickPlayer = useCallback((targetId: string) => action("kick-player", { targetId }), [action]);
+  const guesserPickTrack = useCallback((track: Track) => action("guesser-pick-track", track), [action]);
+  const policeBlock = useCallback((targetId: string) => action("police-block", { targetId }), [action]);
+  const fouActivate = useCallback(() => action("fou-activate"), [action]);
   const clearError = useCallback(() => setError(null), []);
 
   const sendChat = useCallback(
@@ -263,6 +269,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       startSelection, startModeSelection, setPlaybackMode, setSettings,
       startGame, hostStartMusic, transitionToVoting,
       castVote, forceReveal, nextRound, playAgain, kickPlayer,
+      guesserPickTrack, policeBlock, fouActivate,
     }}>
       {children}
     </GameContext.Provider>

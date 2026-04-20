@@ -2,18 +2,23 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { Eye, Check } from "lucide-react";
+import { Eye, Check, Shield, Zap } from "lucide-react";
 import { useGame } from "@/contexts/GameContext";
 import ChatPanel from "@/components/ChatPanel";
 
 export default function VotingPhase() {
-  const { room, playerId, castVote, forceReveal } = useGame();
+  const { room, playerId, castVote, forceReveal, policeBlock, fouActivate } = useGame();
   const [pendingVote, setPendingVote] = useState<string | null>(null);
+  const [showPoliceSelect, setShowPoliceSelect] = useState(false);
 
   if (!room || !room.currentTrack) return null;
   const track = room.currentTrack;
   const isHost = room.players.find((p) => p.id === playerId)?.isHost ?? false;
   const myVote = room.myVote;
+  const isBlocked = room.policeBlockedId === playerId;
+  const isPolicier = room.myRole === "policier";
+  const isFou = room.myRole === "fou";
+  const canFouActivate = isFou && !room.fouActivated && room.currentTrack?.addedBy !== playerId;
 
   // Sync pending with confirmed vote when it updates
   useEffect(() => {
@@ -22,6 +27,7 @@ export default function VotingPhase() {
   }, [myVote]);
 
   const pendingChanged = pendingVote !== null && pendingVote !== myVote;
+  void pendingChanged;
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6 gap-6 max-w-5xl mx-auto w-full">
@@ -42,6 +48,19 @@ export default function VotingPhase() {
             <p className="ml-auto text-xs text-gray-500 flex-shrink-0">Extrait terminé</p>
           </div>
 
+          {/* Role banners */}
+          {room.fouActivated && (
+            <div className="w-full px-4 py-2 rounded-xl bg-yellow-900/30 border border-yellow-600 text-yellow-300 text-sm text-center font-semibold">
+              Le Fou est actif ce round !
+            </div>
+          )}
+
+          {isBlocked && (
+            <div className="w-full px-4 py-2 rounded-xl bg-red-900/30 border border-red-600 text-red-300 text-sm text-center font-semibold">
+              Tu es bloqué par le Policier ce round
+            </div>
+          )}
+
           {/* Vote grid */}
           <div className="w-full">
             <div className="flex items-center justify-between mb-3">
@@ -52,7 +71,7 @@ export default function VotingPhase() {
             <div className="grid grid-cols-2 gap-3">
               {room.players.map((p) => {
                 const isSelf = p.id === playerId;
-                const locked = !!myVote; // vote is locked after confirmation
+                const locked = !!myVote || isBlocked;
                 const disabled = (!room.settings.allowSelfVote && isSelf) || locked;
                 const isPending = !locked && pendingVote === p.id;
                 const isConfirmed = myVote === p.id;
@@ -72,7 +91,7 @@ export default function VotingPhase() {
                       {isSelf && <span className="text-xs text-gray-500">c&apos;est moi</span>}
                     </div>
                     <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                      {voteCount > 0 && (
+                      {room.settings.showVoteCounts && voteCount > 0 && (
                         <span className="w-6 h-6 rounded-full bg-purple-700 text-white text-xs flex items-center justify-center font-bold">
                           {voteCount}
                         </span>
@@ -86,7 +105,9 @@ export default function VotingPhase() {
 
             {/* Confirm / locked */}
             <div className="mt-4">
-              {myVote ? (
+              {isBlocked ? (
+                <p className="text-center text-red-400 text-sm">Tu es bloqué — tu ne peux pas voter ce round</p>
+              ) : myVote ? (
                 <p className="text-center text-green-400 text-sm flex items-center justify-center gap-1.5">
                   <Check size={14} /> Vote verrouillé
                 </p>
@@ -100,6 +121,52 @@ export default function VotingPhase() {
               )}
             </div>
           </div>
+
+          {/* Police power */}
+          {isPolicier && !room.policeBlockedId && (
+            <div className="w-full">
+              {showPoliceSelect ? (
+                <div className="rounded-xl p-3" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+                  <p className="text-sm font-semibold text-blue-300 mb-2">Choisir un joueur à bloquer :</p>
+                  <div className="space-y-1">
+                    {room.players.filter((p) => p.id !== playerId).map((p) => (
+                      <button key={p.id} onClick={() => { policeBlock(p.id); setShowPoliceSelect(false); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/5 transition-colors text-left text-sm">
+                        <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-700 flex-shrink-0">
+                          {p.avatar ? <img src={p.avatar} alt={p.name} className="w-full h-full object-cover" /> : null}
+                        </div>
+                        {p.name}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => setShowPoliceSelect(false)} className="mt-2 text-xs text-gray-500 hover:text-gray-300">Annuler</button>
+                </div>
+              ) : (
+                <button onClick={() => setShowPoliceSelect(true)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm bg-blue-800 hover:bg-blue-700 text-blue-200 transition-all active:scale-95">
+                  <Shield size={14} /> Bloquer un joueur
+                </button>
+              )}
+            </div>
+          )}
+          {isPolicier && room.policeBlockedId && (
+            <p className="text-sm text-blue-300 flex items-center gap-1.5">
+              <Shield size={13} /> Joueur bloqué : {room.players.find((p) => p.id === room.policeBlockedId)?.name ?? "?"}
+            </p>
+          )}
+
+          {/* Fou power */}
+          {canFouActivate && (
+            <button onClick={fouActivate}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm bg-yellow-800 hover:bg-yellow-700 text-yellow-200 transition-all active:scale-95">
+              <Zap size={14} /> Activer mon pouvoir
+            </button>
+          )}
+          {isFou && room.fouActivated && (
+            <p className="text-sm text-yellow-300 flex items-center gap-1.5">
+              <Zap size={13} /> Ton pouvoir est actif ce round !
+            </p>
+          )}
 
           {isHost && (
             <button onClick={forceReveal}

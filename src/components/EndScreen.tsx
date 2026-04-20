@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { Trophy, Medal, RotateCcw } from "lucide-react";
 import { useGame } from "@/contexts/GameContext";
 import ChatPanel from "@/components/ChatPanel";
@@ -70,6 +71,52 @@ export default function EndScreen() {
               </div>
             ))}
           </div>
+
+          {/* All tracks reveal */}
+          {room.settings.showAllTracksEnd && room.roundResults.length > 0 && (
+            <div className="w-full rounded-2xl p-4 mb-4" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+              <h3 className="font-bold text-xs uppercase tracking-wider text-gray-400 mb-3">Toutes les musiques</h3>
+              <div className="space-y-2">
+                {room.roundResults.map((r, i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    {r.track.albumCover ? (
+                      <Image src={r.track.albumCover} alt={r.track.name} width={36} height={36} className="rounded flex-shrink-0" />
+                    ) : (
+                      <div className="w-9 h-9 rounded bg-gray-800 flex-shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate text-white">{r.track.name}</p>
+                      <p className="text-xs text-gray-500 truncate">{r.track.artists}</p>
+                    </div>
+                    <span className="text-xs text-gray-400 flex-shrink-0">{r.ownerName}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Role reveals */}
+          {room.allRoles && (
+            <div className="w-full rounded-2xl p-4 mb-4" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+              <h3 className="font-bold text-xs uppercase tracking-wider text-gray-400 mb-3">Rôles secrets</h3>
+              <div className="space-y-1.5">
+                {room.players.map((p) => {
+                  const role = room.allRoles![p.id];
+                  if (!role || role === "none") return null;
+                  const labels: Record<string, string> = { fou: "Le Fou 🃏", policier: "Le Policier 🛡", guesser: "Le Guesser 🔍" };
+                  return (
+                    <div key={p.id} className="flex items-center gap-2 text-sm">
+                      <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-700 flex-shrink-0">
+                        {p.avatar ? <img src={p.avatar} alt="" className="w-full h-full object-cover" /> : null}
+                      </div>
+                      <span className={`flex-1 ${p.id === playerId ? "text-purple-300" : "text-gray-300"}`}>{p.name}</span>
+                      <span className="text-gray-400 text-xs">{labels[role] ?? role}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Stats */}
           <div className="w-full grid grid-cols-2 gap-3 mb-8">

@@ -7,7 +7,7 @@ import { useGame } from "@/contexts/GameContext";
 import type { SpotifyTrack } from "@/types/game";
 
 export default function Selection() {
-  const { room, playerId, addTrack, removeTrack, setReady, startModeSelection, error } = useGame();
+  const { room, playerId, addTrack, removeTrack, setReady, startModeSelection, guesserPickTrack, error } = useGame();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SpotifyTrack[]>([]);
   const [searching, setSearching] = useState(false);
@@ -20,6 +20,8 @@ export default function Selection() {
   const myTracks = room.myTracks ?? [];
   const allReady = room.players.every((p) => p.isReady);
   const { minTracks, maxTracks } = room.settings;
+  const isGuesser = room.myRole === "guesser";
+  const guesserPickDone = !!room.guesserPickId;
 
   const doSearch = useCallback(async (q: string) => {
     if (q.trim().length < 2) { setResults([]); return; }
@@ -126,6 +128,34 @@ export default function Selection() {
             {me?.isReady ? "Prêt — annuler" : `Prêt (${myTracks.length}/${minTracks} min)`}
           </button>
         </div>
+
+        {/* Guesser pick */}
+        {isGuesser && (
+          <div className="rounded-2xl p-4" style={{ background: "var(--surface)", border: "1px solid #4ade80" }}>
+            <h3 className="font-bold mb-1 text-sm uppercase tracking-wider text-green-400">Rôle : Guesser</h3>
+            <p className="text-xs text-gray-400 mb-3">Choisis un son que tu penses qu&apos;un autre joueur va ajouter. Si tu as raison → +10 pts et le round saute le vote !</p>
+            {guesserPickDone ? (
+              <p className="text-green-400 text-sm font-semibold text-center py-2">✓ Prédiction enregistrée !</p>
+            ) : (
+              <div className="space-y-1 max-h-48 overflow-y-auto">
+                {results.length === 0 ? (
+                  <p className="text-gray-600 text-xs text-center py-3">Cherche un son ci-contre puis clique dessus</p>
+                ) : (
+                  results.map((track) => (
+                    <button key={track.id} onClick={() => guesserPickTrack({ id: track.id, name: track.name, artists: track.artists, albumCover: track.albumCover, previewUrl: track.previewUrl, addedBy: playerId })}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-green-900/30 transition-colors text-left text-xs border border-transparent hover:border-green-700">
+                      {track.albumCover ? <img src={track.albumCover} alt="" className="w-8 h-8 rounded flex-shrink-0 object-cover" /> : <div className="w-8 h-8 rounded bg-gray-800 flex-shrink-0" />}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate text-white">{track.name}</p>
+                        <p className="text-gray-500 truncate">{track.artists}</p>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Players status — sans afficher les trackCounts */}
         <div className="rounded-2xl p-4" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>

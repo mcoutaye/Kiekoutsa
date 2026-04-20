@@ -1,5 +1,5 @@
 import type {
-  GamePhase, PlaybackMode, RoomSettings, Track,
+  GamePhase, PlaybackMode, RoomSettings, Track, RoleName,
   ClientRoom, ClientTrack, VoteResult, RoundResult,
 } from "@/types/game";
 import type { ChatMessage } from "@/types/chat";
@@ -30,6 +30,11 @@ export interface RoomDB {
   chat_messages?: ChatMessage[];
   playing_started_at: string | null;
   updated_at: string;
+  taupe_player_id: string | null;
+  guesser_pick: Track | null;
+  police_blocked_id: string | null;
+  fou_activated: boolean;
+  roles: Record<string, string> | null;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -89,11 +94,23 @@ export function sanitizeRoom(room: RoomDB, myPlayerId: string): ClientRoom {
       }
     : null;
 
+  const roles = (room as any).roles as Record<string, string> | null ?? null;
+  const myRole = roles?.[myPlayerId] as RoleName ?? null;
+  const guesserPick = (room as any).guesser_pick as Track | null ?? null;
+
+  const guesserPickId = (myRole === "guesser" || room.phase === "end")
+    ? guesserPick?.id ?? null
+    : null;
+
+  const allRoles: Record<string, RoleName> | null = room.phase === "end" && roles
+    ? (roles as Record<string, RoleName>)
+    : null;
+
   return {
     code: room.code,
     phase: room.phase,
     playbackMode: room.playback_mode,
-    settings: room.settings ?? DEFAULT_SETTINGS,
+    settings: { ...DEFAULT_SETTINGS, ...(room.settings ?? {}) },
     currentTrack,
     currentTrackIndex: room.current_track_index,
     totalTracks: trackQueue.length,
@@ -112,6 +129,13 @@ export function sanitizeRoom(room: RoomDB, myPlayerId: string): ClientRoom {
     roundResults: roundResults ?? [],
     playingStartedAt: room.playing_started_at ?? null,
     chatMessages: chatMessages ?? [],
+    taupePlayerId: (room as any).taupe_player_id ?? null,
+    isGuesserRound: !!(guesserPick && room.current_track?.id === guesserPick.id),
+    myRole,
+    policeBlockedId: (room as any).police_blocked_id ?? null,
+    fouActivated: (room as any).fou_activated ?? false,
+    guesserPickId,
+    allRoles,
   };
 }
 
@@ -129,7 +153,6 @@ export function applyAction(
 
   switch (action) {
     case "send-chat": {
-      // Chat is available regardless of playback mode
       if (!player) return { error: "Non autorisé" };
       const raw = String(payload?.text ?? "");
       const text = raw.trim().slice(0, 300);
@@ -145,17 +168,15 @@ export function applyAction(
       };
 
       const prev = room.chat_messages ?? [];
-      const next = [...prev, msg].slice(-200); // cap history
+      const next = [...prev, msg].slice(-200);
       return { update: { chat_messages: next, updated_at: now } };
     }
 
     case "leave-room": {
-      // Allow leaving at any time
-      if (!player) return { update: {} }; // already gone
+      if (!player) return { update: {} };
 
       const remaining = room.players.filter((p) => p.id !== playerId);
 
-      // Remove votes cast by the leaver and votes targeting the leaver
       const newVotes: Record<string, string> = {};
       for (const [voterId, suspectedId] of Object.entries(room.votes ?? {})) {
         if (voterId === playerId) continue;
@@ -163,12 +184,10 @@ export function applyAction(
         newVotes[voterId] = suspectedId;
       }
 
-      // If host leaves, transfer host to first remaining player (if any)
       if (isHost && remaining.length > 0) {
         remaining[0] = { ...remaining[0], is_host: true };
       }
 
-      // Optional: remove chat messages from the leaver (keeps transcript cleaner)
       const nextChat = (room.chat_messages ?? []).filter((m) => m.playerId !== playerId);
 
       return { update: { players: remaining, votes: newVotes, chat_messages: nextChat, updated_at: now } };
@@ -177,7 +196,7 @@ export function applyAction(
     case "join-room": {
       if (room.phase !== "lobby") return { error: "La partie a déjà commencé" };
       if (room.players.length >= 10) return { error: "Le salon est plein" };
-      if (room.players.find((p) => p.id === playerId)) return { update: {} }; // already in
+      if (room.players.find((p) => p.id === playerId)) return { update: {} };
       const newPlayers: PlayerDB[] = [
         ...room.players,
         {
@@ -192,7 +211,7 @@ export function applyAction(
 
     case "set-settings": {
       if (!isHost || room.phase !== "lobby") return { error: "Non autorisé" };
-      const s = { ...room.settings, ...payload } as RoomSettings;
+      const s = { ...DEFAULT_SETTINGS, ...room.settings, ...payload } as RoomSettings;
       s.minTracks = Math.max(1, Math.min(5, s.minTracks));
       s.maxTracks = Math.max(s.minTracks, Math.min(10, s.maxTracks));
       return { update: { settings: s, updated_at: now } };
@@ -255,6 +274,17 @@ export function applyAction(
       const queue = shuffleArray(allTracks);
       const firstTrack = queue[0] ?? null;
       const startedAt = room.settings.autoPlay ? now : null;
+
+      let roles: Record<string, string> | null = null;
+      if (room.settings.rolesEnabled && room.players.length >= 3) {
+        const playerIds = shuffleArray(room.players.map((p) => p.id));
+        roles = {};
+        const roleNames = ["guesser", "policier", "fou"];
+        playerIds.forEach((pid, idx) => {
+          roles![pid] = roleNames[idx] ?? "none";
+        });
+      }
+
       return {
         update: {
           track_queue: queue,
@@ -264,6 +294,11 @@ export function applyAction(
           votes: {},
           round_results: [],
           playing_started_at: startedAt,
+          taupe_player_id: null,
+          police_blocked_id: null,
+          fou_activated: false,
+          guesser_pick: null,
+          roles,
           updated_at: now,
         },
       };
@@ -276,6 +311,10 @@ export function applyAction(
 
     case "transition-to-voting": {
       if (!isHost || room.phase !== "playing") return { update: {} };
+      const guesserPick = (room as any).guesser_pick as Track | null ?? null;
+      if (guesserPick && room.current_track?.id === guesserPick.id) {
+        return { update: { ...computeGuesserReveal(room), updated_at: now } };
+      }
       return { update: { phase: "voting", updated_at: now } };
     }
 
@@ -285,14 +324,27 @@ export function applyAction(
       if (!player) return { error: "Joueur introuvable" };
       if (!room.settings.allowSelfVote && payload.suspectedPlayerId === playerId)
         return { error: "Tu ne peux pas voter pour toi-même" };
-      if (!room.players.find((p) => p.id === payload.suspectedPlayerId))
-        return { error: "Joueur cible introuvable" };
+
+      const policeBlockedId = (room as any).police_blocked_id as string | null ?? null;
+      if (policeBlockedId === playerId) return { error: "Tu es bloqué par le policier ce round" };
+
+      const allPlayers = [...room.players];
+      const taupePlayerId = (room as any).taupe_player_id as string | null ?? null;
+      if (taupePlayerId && payload.suspectedPlayerId !== taupePlayerId) {
+        if (!allPlayers.find((p) => p.id === payload.suspectedPlayerId))
+          return { error: "Joueur cible introuvable" };
+      } else if (!taupePlayerId) {
+        if (!room.players.find((p) => p.id === payload.suspectedPlayerId))
+          return { error: "Joueur cible introuvable" };
+      }
 
       const newVotes = { ...room.votes, [playerId]: payload.suspectedPlayerId };
-      const allVoted = Object.keys(newVotes).length >= room.players.length;
+      const votingPlayerIds = room.players
+        .filter((p) => p.id !== policeBlockedId)
+        .map((p) => p.id);
+      const allVoted = votingPlayerIds.every((pid) => newVotes[pid] !== undefined);
 
       if (allVoted && room.settings.autoReveal) {
-        // Inline reveal
         return { update: { votes: newVotes, ...computeReveal(room, newVotes), updated_at: now } };
       }
       return { update: { votes: newVotes, updated_at: now } };
@@ -317,6 +369,8 @@ export function applyAction(
           current_track_index: nextIdx,
           current_track: nextTrack,
           votes: {},
+          police_blocked_id: null,
+          fou_activated: false,
           playing_started_at: startedAt,
           updated_at: now,
         },
@@ -325,19 +379,76 @@ export function applyAction(
 
     case "play-again": {
       if (!isHost || room.phase !== "end") return { error: "Non autorisé" };
-      const reset = room.players.map((p) => ({ ...p, score: 0, is_ready: false, tracks: [] }));
+      const reset = room.players.filter((p) => p.id !== "__taupe__").map((p) => ({ ...p, score: 0, is_ready: false, tracks: [] }));
       return {
         update: {
           phase: "lobby", playback_mode: null, players: reset,
           track_queue: [], current_track_index: -1, current_track: null,
-          votes: {}, round_results: [], chat_messages: [], playing_started_at: null, updated_at: now,
+          votes: {}, round_results: [], chat_messages: [], playing_started_at: null,
+          roles: null, taupe_player_id: null, guesser_pick: null,
+          police_blocked_id: null, fou_activated: false,
+          updated_at: now,
         },
       };
+    }
+
+    case "guesser-pick-track": {
+      if (room.phase !== "selection" || !player) return { error: "Non autorisé" };
+      const roles = (room as any).roles as Record<string, string> | null ?? null;
+      if (roles?.[playerId] !== "guesser") return { error: "Tu n'es pas le Guesser" };
+      const track = payload as Track;
+      if (player.tracks.find((t) => t.id === track.id)) return { error: "Ce track est déjà dans ta sélection" };
+      return { update: { guesser_pick: { ...track, addedBy: playerId }, updated_at: now } };
+    }
+
+    case "police-block": {
+      if (room.phase !== "playing" && room.phase !== "voting") return { error: "Non autorisé" };
+      if (!player) return { error: "Non autorisé" };
+      const roles = (room as any).roles as Record<string, string> | null ?? null;
+      if (roles?.[playerId] !== "policier") return { error: "Tu n'es pas le Policier" };
+      const targetId = payload.targetId as string;
+      if (!room.players.find((p) => p.id === targetId)) return { error: "Joueur cible introuvable" };
+      return { update: { police_blocked_id: targetId, updated_at: now } };
+    }
+
+    case "fou-activate": {
+      if (room.phase !== "playing" && room.phase !== "voting") return { error: "Non autorisé" };
+      if (!player) return { error: "Non autorisé" };
+      const roles = (room as any).roles as Record<string, string> | null ?? null;
+      if (roles?.[playerId] !== "fou") return { error: "Tu n'es pas le Fou" };
+      if (room.current_track?.addedBy === playerId) return { error: "Ce n'est pas ta musique" };
+      return { update: { fou_activated: true, updated_at: now } };
     }
 
     default:
       return { error: `Action inconnue: ${action}` };
   }
+}
+
+function computeGuesserReveal(room: RoomDB): Partial<RoomDB> {
+  const roles = (room as any).roles as Record<string, string> | null ?? null;
+  const guesserId = Object.entries(roles ?? {}).find(([, r]) => r === "guesser")?.[0];
+  const pointsEarned: Record<string, number> = guesserId ? { [guesserId]: 10 } : {};
+  const updatedPlayers = room.players.map((p) => ({ ...p, score: p.score + (pointsEarned[p.id] ?? 0) }));
+  const track = room.current_track!;
+  const owner = room.players.find((p) => p.id === track.addedBy);
+  const roundResult: RoundResult = {
+    track: {
+      id: track.id, name: track.name, artists: track.artists,
+      albumCover: track.albumCover, previewUrl: track.previewUrl,
+      addedBy: track.addedBy, addedByName: owner?.name ?? "Inconnu",
+    },
+    ownerId: track.addedBy,
+    ownerName: owner?.name ?? "Inconnu",
+    votes: [],
+    pointsEarned,
+    isGuesserRound: true,
+  };
+  return {
+    phase: "reveal",
+    players: updatedPlayers,
+    round_results: [...room.round_results, roundResult],
+  };
 }
 
 function computeReveal(room: RoomDB, votes: Record<string, string>): Partial<RoomDB> {
@@ -346,19 +457,50 @@ function computeReveal(room: RoomDB, votes: Record<string, string>): Partial<Roo
   const track = room.current_track;
   const ownerId = track.addedBy;
   const owner = room.players.find((p) => p.id === ownerId);
+  const taupePlayerId = (room as any).taupe_player_id as string | null ?? null;
+  const isTaupeRound = !!taupePlayerId && ownerId === taupePlayerId;
+  const fouActivated = (room as any).fou_activated as boolean ?? false;
+  const roles = (room as any).roles as Record<string, string> | null ?? null;
+  const fouId = Object.entries(roles ?? {}).find(([, r]) => r === "fou")?.[0];
 
   const voteResults: VoteResult[] = Object.entries(votes).map(([vid, sid]) => ({
     voterId: vid,
     voterName: room.players.find((p) => p.id === vid)?.name ?? "Inconnu",
     suspectedId: sid,
-    suspectedName: room.players.find((p) => p.id === sid)?.name ?? "Inconnu",
+    suspectedName: sid === taupePlayerId
+      ? "La Taupe"
+      : room.players.find((p) => p.id === sid)?.name ?? "Inconnu",
     wasCorrect: sid === ownerId,
   }));
 
   const pointsEarned: Record<string, number> = {};
-  for (const vr of voteResults) {
-    if (vr.wasCorrect) pointsEarned[vr.voterId] = (pointsEarned[vr.voterId] ?? 0) + 1;
-    else if (ownerId) pointsEarned[ownerId] = (pointsEarned[ownerId] ?? 0) + 1;
+
+  if (isTaupeRound) {
+    for (const vr of voteResults) {
+      if (vr.wasCorrect) {
+        pointsEarned[vr.voterId] = (pointsEarned[vr.voterId] ?? 0) + 2;
+      } else {
+        const current = pointsEarned[vr.voterId] ?? 0;
+        pointsEarned[vr.voterId] = Math.max(0, current - 1);
+      }
+    }
+  } else {
+    for (const vr of voteResults) {
+      if (vr.wasCorrect) {
+        if (vr.voterId !== ownerId) {
+          pointsEarned[vr.voterId] = (pointsEarned[vr.voterId] ?? 0) + 1;
+        }
+      } else if (ownerId) {
+        pointsEarned[ownerId] = (pointsEarned[ownerId] ?? 0) + 1;
+      }
+    }
+  }
+
+  if (fouActivated && fouId) {
+    const fouVoteCount = voteResults.filter((v) => v.suspectedId === fouId).length;
+    if (fouVoteCount > 0) {
+      pointsEarned[fouId] = (pointsEarned[fouId] ?? 0) + fouVoteCount;
+    }
   }
 
   const updatedPlayers = room.players.map((p) => ({
@@ -366,13 +508,15 @@ function computeReveal(room: RoomDB, votes: Record<string, string>): Partial<Roo
     score: p.score + (pointsEarned[p.id] ?? 0),
   }));
 
+  const ownerName = isTaupeRound ? "La Taupe" : owner?.name ?? "Inconnu";
+
   const roundResult: RoundResult = {
     track: {
       id: track.id, name: track.name, artists: track.artists,
       albumCover: track.albumCover, previewUrl: track.previewUrl,
-      addedBy: track.addedBy, addedByName: owner?.name ?? "Inconnu",
+      addedBy: track.addedBy, addedByName: ownerName,
     },
-    ownerId, ownerName: owner?.name ?? "Inconnu",
+    ownerId, ownerName,
     votes: voteResults, pointsEarned,
   };
 

@@ -61,6 +61,11 @@ export async function POST(req: NextRequest) {
     round_results: [],
     chat_messages: [],
     playing_started_at: null,
+    roles: null,
+    taupe_player_id: null,
+    guesser_pick: null,
+    police_blocked_id: null,
+    fou_activated: false,
   };
 
   const { error } = await sb.from("rooms").insert(roomData);

@@ -15,6 +15,8 @@ export default function RevealPhase() {
   const hasMore = room.currentTrackIndex + 1 < room.totalTracks;
   const isOwner = last?.ownerId === playerId;
   const anonymous = room.settings.anonymousVotes;
+  const isTaupeRound = last?.ownerId === room.taupePlayerId;
+  const isGuesserRound = last?.isGuesserRound;
 
   const getPlayer = (id: string) => room.players.find((p) => p.id === id);
 
@@ -49,6 +51,28 @@ export default function RevealPhase() {
               </div>
             )}
           </div>
+
+          {/* Special round banners */}
+          {isGuesserRound && (
+            <div className="w-full px-4 py-3 rounded-xl bg-green-900/30 border border-green-500 text-green-300 text-sm text-center font-semibold">
+              🔍 Le Guesser avait prédit ce son ! +10 pts, vote annulé
+            </div>
+          )}
+          {isTaupeRound && (
+            <div className="w-full px-4 py-3 rounded-xl bg-gray-800/60 border border-gray-500 text-gray-300 text-sm text-center font-semibold">
+              🕵 C&apos;était une musique de La Taupe ! +2 pts pour les bons votants, -1 pour les autres
+            </div>
+          )}
+          {room.fouActivated && (
+            <div className="w-full px-4 py-2 rounded-xl bg-yellow-900/30 border border-yellow-600 text-yellow-300 text-xs text-center font-semibold">
+              🃏 Le Fou était actif — il gagne +1 par vote reçu
+            </div>
+          )}
+          {room.policeBlockedId && (
+            <div className="w-full px-4 py-2 rounded-xl bg-blue-900/30 border border-blue-600 text-blue-300 text-xs text-center">
+              🛡 {room.players.find((p) => p.id === room.policeBlockedId)?.name ?? "Un joueur"} était bloqué par le Policier
+            </div>
+          )}
 
           {/* Votes breakdown */}
           {last && (

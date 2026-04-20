@@ -17,8 +17,13 @@ CREATE TABLE IF NOT EXISTS rooms (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- If the table already exists, ensure the column exists as well
+-- If the table already exists, ensure the columns exist as well
 ALTER TABLE rooms ADD COLUMN IF NOT EXISTS chat_messages JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS roles JSONB DEFAULT NULL;
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS taupe_player_id TEXT DEFAULT NULL;
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS guesser_pick JSONB DEFAULT NULL;
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS police_blocked_id TEXT DEFAULT NULL;
+ALTER TABLE rooms ADD COLUMN IF NOT EXISTS fou_activated BOOLEAN DEFAULT FALSE;
 
 -- Désactiver RLS pour le prototype (activer + policies pour la prod)
 ALTER TABLE rooms DISABLE ROW LEVEL SECURITY;

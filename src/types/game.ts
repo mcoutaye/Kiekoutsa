@@ -11,6 +11,8 @@ export type GamePhase =
 
 export type PlaybackMode = "master" | "sync";
 
+export type RoleName = "fou" | "policier" | "guesser" | "none";
+
 export interface RoomSettings {
   minTracks: number;
   maxTracks: number;
@@ -18,6 +20,10 @@ export interface RoomSettings {
   autoPlay: boolean;
   allowSelfVote: boolean;
   anonymousVotes: boolean;
+  showVoteCounts: boolean;
+  showAllTracksEnd: boolean;
+  taupeMode: boolean;
+  rolesEnabled: boolean;
 }
 
 export const DEFAULT_SETTINGS: RoomSettings = {
@@ -27,6 +33,10 @@ export const DEFAULT_SETTINGS: RoomSettings = {
   autoPlay: true,
   allowSelfVote: true,
   anonymousVotes: false,
+  showVoteCounts: false,
+  showAllTracksEnd: false,
+  taupeMode: false,
+  rolesEnabled: false,
 };
 
 export interface Track {
@@ -71,6 +81,7 @@ export interface RoundResult {
   ownerName: string;
   votes: VoteResult[];
   pointsEarned: Record<string, number>;
+  isGuesserRound?: boolean;
 }
 
 export interface ClientRoom {
@@ -89,6 +100,13 @@ export interface ClientRoom {
   roundResults: RoundResult[];
   playingStartedAt: string | null;
   chatMessages?: ChatMessage[];
+  taupePlayerId: string | null;
+  isGuesserRound: boolean;
+  myRole: RoleName | null;
+  policeBlockedId: string | null;
+  fouActivated: boolean;
+  guesserPickId: string | null;
+  allRoles: Record<string, RoleName> | null;
 }
 
 export interface SpotifyTrack {
