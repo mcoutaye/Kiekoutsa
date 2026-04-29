@@ -62,7 +62,7 @@ export default function HomePage() {
       {disconnectedReason === "inactivity" && (
         <div className="w-full max-w-lg mb-4 flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-900/30 border border-amber-600 text-amber-300 text-sm">
           <Clock size={16} className="flex-shrink-0" />
-          <span className="flex-1">Le salon a été fermé pour inactivité.</span>
+          <span className="flex-1">Le salon a été fermé pour cause d'inactivité.</span>
           <button onClick={clearDisconnectedReason} className="text-amber-500 hover:text-amber-300 transition-colors flex-shrink-0 text-lg leading-none">×</button>
         </div>
       )}
