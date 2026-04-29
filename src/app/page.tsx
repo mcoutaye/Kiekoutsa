@@ -4,11 +4,11 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useGame } from "@/contexts/GameContext";
 import AvatarPicker from "@/components/AvatarPicker";
-import { Disc3 } from "lucide-react";
+import { Disc3, Clock } from "lucide-react";
 
 export default function HomePage() {
   const router = useRouter();
-  const { createRoom, joinRoom, error, clearError } = useGame();
+  const { createRoom, joinRoom, error, clearError, disconnectedReason, clearDisconnectedReason } = useGame();
   const [tab, setTab] = useState<"create" | "join">("create");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
@@ -58,6 +58,14 @@ export default function HomePage() {
         </div>
         <p className="text-gray-400 text-lg">Qui a mis ce son ?</p>
       </div>
+
+      {disconnectedReason === "inactivity" && (
+        <div className="w-full max-w-lg mb-4 flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-900/30 border border-amber-600 text-amber-300 text-sm">
+          <Clock size={16} className="flex-shrink-0" />
+          <span className="flex-1">Le salon a été fermé pour inactivité.</span>
+          <button onClick={clearDisconnectedReason} className="text-amber-500 hover:text-amber-300 transition-colors flex-shrink-0 text-lg leading-none">×</button>
+        </div>
+      )}
 
       <div className="w-full max-w-lg rounded-2xl p-6" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
         <div className="flex rounded-xl overflow-hidden mb-6" style={{ background: "var(--bg)" }}>

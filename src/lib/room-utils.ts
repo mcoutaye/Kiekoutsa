@@ -180,6 +180,10 @@ export function applyAction(
       return { update: { chat_messages: next, updated_at: now } };
     }
 
+    case "heartbeat": {
+      return { update: { updated_at: now } };
+    }
+
     case "leave-room": {
       if (!player) return { update: {} };
 

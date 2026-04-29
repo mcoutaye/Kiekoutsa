@@ -27,6 +27,8 @@ interface GameContextType {
   roomCode: string | null;
   error: string | null;
   audioSignal: number;
+  disconnectedReason: "inactivity" | null;
+  clearDisconnectedReason: () => void;
   clearError: () => void;
   createRoom: (playerName: string, avatar: string) => Promise<string | null>;
   joinRoom: (roomCode: string, playerName: string, avatar: string) => Promise<string | null>;
@@ -65,8 +67,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [roomCode, setRoomCodeState] = useState<string | null>(() => getSavedRoomCode());
   const [error, setError] = useState<string | null>(null);
   const [audioSignal, setAudioSignal] = useState(0);
+  const [disconnectedReason, setDisconnectedReason] = useState<"inactivity" | null>(null);
   const playerId = useRef(getClientId()).current;
   const prevPlayingStartedAt = useRef<string | null>(null);
+  const isLeavingRef = useRef(false);
 
   const setRoomCode = useCallback((code: string | null) => {
     setRoomCodeState(code);
@@ -76,21 +80,59 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // ── Heartbeat + beforeunload cleanup ───────────────────────────────────
+  useEffect(() => {
+    if (!roomCode) return;
+
+    // Touch updated_at every 2 min so the room isn't considered abandoned
+    const heartbeat = setInterval(() => {
+      fetch(`/api/rooms/${roomCode}/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "heartbeat", playerId, payload: {} }),
+      }).catch(() => {});
+    }, 2 * 60 * 1000);
+
+    // Fire-and-forget leave on tab close
+    const handleBeforeUnload = () => {
+      const body = JSON.stringify({ action: "leave-room", playerId, payload: {} });
+      navigator.sendBeacon(
+        `/api/rooms/${roomCode}/action`,
+        new Blob([body], { type: "application/json" })
+      );
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      clearInterval(heartbeat);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [roomCode, playerId]);
+
   // ── Subscribe to Supabase Realtime + polling fallback ──────────────────
   useEffect(() => {
     if (!roomCode) return;
 
     const fetchRoom = () =>
       fetch(`/api/rooms/${roomCode}?playerId=${encodeURIComponent(playerId)}`)
-        .then((r) => r.json())
-        .then(({ room: r }: { room: ClientRoom | null }) => {
+        .then((res) => {
+          if (res.status === 404) {
+            if (!isLeavingRef.current) setDisconnectedReason("inactivity");
+            setRoomCode(null);
+            setRoom(null);
+            return null;
+          }
+          return res.json();
+        })
+        .then((data) => {
+          if (!data) return;
+          const r: ClientRoom | null = data.room;
           if (!r) return;
           if (!r.players.some((p) => p.id === playerId)) {
             setRoomCode(null);
             setRoom(null);
             return;
           }
-          // Only apply if not older than current state
           setRoom((prev) => {
             if (prev?.updatedAt && r.updatedAt && r.updatedAt < prev.updatedAt) return prev;
             return r;
@@ -263,25 +305,26 @@ export function GameProvider({ children }: { children: ReactNode }) {
   );
 
   const leaveRoom = useCallback(async () => {
+    isLeavingRef.current = true;
     if (!roomCode) {
       setRoom(null);
       setRoomCode(null);
       return;
     }
     try {
-      // Ask server to remove us from the room (and possibly transfer host)
       await action("leave-room");
     } finally {
-      // Always clear local state so UI returns home
       setRoom(null);
       setRoomCode(null);
     }
   }, [action, roomCode, setRoomCode]);
 
+  const clearDisconnectedReason = useCallback(() => setDisconnectedReason(null), []);
+
   return (
     <GameContext.Provider value={{
-      room, playerId, roomCode, error, audioSignal,
-      clearError, createRoom, joinRoom, leaveRoom, sendChat, addTrack, removeTrack, setReady,
+      room, playerId, roomCode, error, audioSignal, disconnectedReason,
+      clearDisconnectedReason, clearError, createRoom, joinRoom, leaveRoom, sendChat, addTrack, removeTrack, setReady,
       startSelection, startSelectionConfirmed, startModeSelection, setPlaybackMode, setSettings,
       startGame, hostStartMusic, transitionToVoting,
       castVote, forceReveal, nextRound, playAgain, kickPlayer,

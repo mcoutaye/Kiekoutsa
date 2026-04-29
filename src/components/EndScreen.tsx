@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Trophy, Medal, RotateCcw } from "lucide-react";
+import { Trophy, Medal, RotateCcw, Zap, Shield, Search, type LucideIcon } from "lucide-react";
 import { useGame } from "@/contexts/GameContext";
 import ChatPanel from "@/components/ChatPanel";
 
@@ -103,14 +103,25 @@ export default function EndScreen() {
                 {room.players.map((p) => {
                   const role = room.allRoles![p.id];
                   if (!role || role === "none") return null;
-                  const labels: Record<string, string> = { fou: "Le Fou 🃏", policier: "Le Policier 🛡", guesser: "Le Guesser 🔍" };
+                  const roleConfig: Record<string, { Icon: LucideIcon; iconClass: string; label: string }> = {
+                    fou: { Icon: Zap, iconClass: "text-yellow-400", label: "Le Fou" },
+                    policier: { Icon: Shield, iconClass: "text-blue-400", label: "Le Policier" },
+                    guesser: { Icon: Search, iconClass: "text-green-400", label: "Le Guesser" },
+                  };
+                  const cfg = roleConfig[role];
                   return (
                     <div key={p.id} className="flex items-center gap-2 text-sm">
                       <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-700 flex-shrink-0">
                         {p.avatar ? <img src={p.avatar} alt="" className="w-full h-full object-cover" /> : null}
                       </div>
                       <span className={`flex-1 ${p.id === playerId ? "text-purple-300" : "text-gray-300"}`}>{p.name}</span>
-                      <span className="text-gray-400 text-xs">{labels[role] ?? role}</span>
+                      {cfg ? (
+                        <span className="flex items-center gap-1 text-gray-400 text-xs">
+                          <cfg.Icon size={11} className={cfg.iconClass} /> {cfg.label}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">{role}</span>
+                      )}
                     </div>
                   );
                 })}

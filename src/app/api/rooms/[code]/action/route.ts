@@ -104,6 +104,12 @@ export async function POST(
     }
   }
 
+  // If leave-room leaves the room empty, delete it immediately
+  if (action === "leave-room" && Array.isArray(finalUpd.players) && finalUpd.players.length === 0) {
+    await sb.from("rooms").delete().eq("code", code.toUpperCase());
+    return NextResponse.json({ ok: true, room: null });
+  }
+
   if (Object.keys(finalUpd).length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: updated, error: updateError } = await (sb.from("rooms") as any)
