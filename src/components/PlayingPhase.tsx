@@ -180,7 +180,7 @@ export default function PlayingPhase() {
                       {p.avatar ? <img src={p.avatar} alt={p.name} className="w-full h-full object-cover" /> : null}
                     </div>
                     <span className="flex-1 truncate font-medium text-left">{p.name}</span>
-                    {voteCount > 0 && (
+                    {room.settings.showVoteCounts && voteCount > 0 && (
                       <span className="flex-shrink-0 w-5 h-5 rounded-full bg-purple-700 text-white text-xs flex items-center justify-center font-bold">
                         {voteCount}
                       </span>
