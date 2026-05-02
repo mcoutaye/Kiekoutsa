@@ -75,7 +75,9 @@ export default function VotingPhase() {
           <div className="w-full">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xl font-black">Qui a mis ce son ?</h3>
-              <span className="text-sm text-gray-400">{room.votedPlayerIds.length}/{room.players.length} votés</span>
+              {room.settings.showVoteCounts && (
+                <span className="text-sm text-gray-400">{room.votedPlayerIds.length}/{room.players.length} votés</span>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -106,7 +108,7 @@ export default function VotingPhase() {
                           {voteCount}
                         </span>
                       )}
-                      {hasVoted && <div className="w-2 h-2 rounded-full bg-green-500" title="A voté" />}
+                      {room.settings.showVoteCounts && hasVoted && <div className="w-2 h-2 rounded-full bg-green-500" title="A voté" />}
                     </div>
                   </button>
                 );

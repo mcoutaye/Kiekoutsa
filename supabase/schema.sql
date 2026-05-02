@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS rooms (
   code TEXT PRIMARY KEY,
   phase TEXT NOT NULL DEFAULT 'lobby',
   playback_mode TEXT,
-  settings JSONB NOT NULL DEFAULT '{"minTracks":3,"maxTracks":5,"autoReveal":false,"autoPlay":true,"allowSelfVote":true,"anonymousVotes":false}',
+  settings JSONB NOT NULL DEFAULT '{"minTracks":3,"maxTracks":5,"autoReveal":false,"autoPlay":true,"allowSelfVote":true,"anonymousVotes":false,"showVoteCounts":false,"showAllTracksEnd":false}',
   players JSONB NOT NULL DEFAULT '[]',
   track_queue JSONB NOT NULL DEFAULT '[]',
   current_track_index INTEGER NOT NULL DEFAULT -1,
