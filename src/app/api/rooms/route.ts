@@ -68,6 +68,9 @@ export async function POST(req: NextRequest) {
     police_blocks_used: 0,
     fou_activated: false,
     fou_activations_used: 0,
+    target_assignments: null,
+    target_votes: {},
+    current_round: 1,
   };
 
   const { error } = await sb.from("rooms").insert(roomData);

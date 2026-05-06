@@ -88,7 +88,12 @@ export default function EndScreen() {
                       <p className="text-sm font-medium truncate text-white">{r.track.name}</p>
                       <p className="text-xs text-gray-500 truncate">{r.track.artists}</p>
                     </div>
-                    <span className="text-xs text-gray-400 flex-shrink-0">{r.ownerName}</span>
+                    <span className="text-xs text-gray-400 flex-shrink-0">
+                      {r.ownerName}
+                      {room.settings.gameMode === "cible" && r.targetName && (
+                        <span className="text-pink-400"> → {r.targetName}</span>
+                      )}
+                    </span>
                   </div>
                 ))}
               </div>

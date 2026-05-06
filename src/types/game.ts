@@ -23,10 +23,11 @@ export interface RoomSettings {
   anonymousVotes: boolean;
   showVoteCounts: boolean;
   showAllTracksEnd: boolean;
-  gameMode: "basique" | "taupe";
+  gameMode: "basique" | "taupe" | "cible";
   enabledRoles: RoleName[];
   policeBlocksPerGame: number;
   fouActivationsPerGame: number;
+  numberOfRounds: number;
 }
 
 export const DEFAULT_SETTINGS: RoomSettings = {
@@ -42,6 +43,7 @@ export const DEFAULT_SETTINGS: RoomSettings = {
   enabledRoles: [],
   policeBlocksPerGame: 1,
   fouActivationsPerGame: 1,
+  numberOfRounds: 3,
 };
 
 export interface Track {
@@ -78,6 +80,9 @@ export interface VoteResult {
   suspectedId: string;
   suspectedName: string;
   wasCorrect: boolean;
+  targetGuessId?: string;
+  targetGuessName?: string;
+  targetWasCorrect?: boolean;
 }
 
 export interface RoundResult {
@@ -87,6 +92,8 @@ export interface RoundResult {
   votes: VoteResult[];
   pointsEarned: Record<string, number>;
   isGuesserRound?: boolean;
+  targetId?: string;
+  targetName?: string;
 }
 
 export interface ClientRoom {
@@ -116,6 +123,11 @@ export interface ClientRoom {
   fouActivationsUsed: number;
   updatedAt: string;
   guesserPick: { id: string; name: string; artists: string; albumCover: string } | null;
+  myTargetId: string | null;
+  myTargetName: string | null;
+  myTargetVote: string | null;
+  targetVotedPlayerIds: string[];
+  currentRound: number;
 }
 
 export interface SpotifyTrack {

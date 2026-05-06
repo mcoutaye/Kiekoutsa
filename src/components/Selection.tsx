@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import Image from "next/image";
-import { Search, Plus, Check, X, ArrowRight } from "lucide-react";
+import { Search, Plus, Check, X, ArrowRight, Target } from "lucide-react";
 import { useGame } from "@/contexts/GameContext";
 import type { SpotifyTrack } from "@/types/game";
 
@@ -22,6 +22,10 @@ export default function Selection() {
   const { minTracks, maxTracks } = room.settings;
   const isGuesser = room.myRole === "guesser";
   const guesserPickDone = !!room.guesserPickId;
+  const isCible = room.settings.gameMode === "cible";
+  const myTarget = isCible && room.myTargetId
+    ? room.players.find((p) => p.id === room.myTargetId)
+    : null;
 
   const doSearch = useCallback(async (q: string) => {
     if (q.trim().length < 2) { setResults([]); return; }
@@ -47,9 +51,21 @@ export default function Selection() {
     <div className="flex-1 flex flex-col lg:flex-row max-w-6xl mx-auto w-full p-6 gap-6">
       {/* Left: search */}
       <div className="flex-1 flex flex-col min-w-0">
+        {isCible && myTarget && (
+          <div className="mb-4 flex items-center gap-3 px-4 py-3 rounded-xl border border-pink-500 bg-pink-900/20">
+            <Target size={16} className="text-pink-400 flex-shrink-0" />
+            <span className="text-sm text-pink-300 font-semibold">Ta cible :</span>
+            <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 bg-gray-700">
+              {myTarget.avatar ? <img src={myTarget.avatar} alt={myTarget.name} className="w-full h-full object-cover" /> : null}
+            </div>
+            <span className="font-bold text-white text-sm">{myTarget.name}</span>
+          </div>
+        )}
         <h2 className="font-bold text-xl mb-1">Choisis tes musiques</h2>
         <p className="text-gray-400 text-sm mb-4">
-          {myTracks.length} sélectionnée{myTracks.length !== 1 ? "s" : ""} — entre {minTracks} et {maxTracks}
+          {isCible
+            ? `${myTracks.length === 0 ? "Aucune" : myTracks.length} musique sélectionnée — choisis 1 son pour ta cible`
+            : `${myTracks.length} sélectionnée${myTracks.length !== 1 ? "s" : ""} — entre ${minTracks} et ${maxTracks}`}
         </p>
 
         <div className="relative mb-4">
@@ -84,7 +100,7 @@ export default function Selection() {
           )}
           {results.map((track) => {
             const added = isAdded(track.id);
-            const full = myTracks.length >= maxTracks;
+            const full = isCible ? myTracks.length >= 1 : myTracks.length >= maxTracks;
             return (
               <div key={track.id}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${added ? "opacity-50" : !full ? "cursor-pointer hover:bg-white/5" : ""}`}
@@ -114,7 +130,7 @@ export default function Selection() {
         {/* My tracks */}
         <div className="rounded-2xl p-4" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
           <h3 className="font-bold mb-3 text-sm uppercase tracking-wider text-gray-400">
-            Ma sélection ({myTracks.length}/{maxTracks})
+            {isCible ? `Ma sélection (${myTracks.length}/1)` : `Ma sélection (${myTracks.length}/${maxTracks})`}
           </h3>
           {myTracks.length === 0 && (
             <p className="text-gray-600 text-sm text-center py-4">Aucune musique ajoutée</p>
@@ -137,10 +153,10 @@ export default function Selection() {
           </div>
           {error && <p className="text-red-400 text-xs mt-2">{error}</p>}
           <button onClick={() => setReady(!me?.isReady)}
-            disabled={!me?.isReady && myTracks.length < minTracks}
+            disabled={!me?.isReady && (isCible ? myTracks.length !== 1 : myTracks.length < minTracks)}
             className={`w-full mt-4 py-3 rounded-xl font-bold transition-all active:scale-95 text-sm
-              ${me?.isReady ? "bg-green-700 hover:bg-green-600 text-white" : myTracks.length >= minTracks ? "bg-purple-600 hover:bg-purple-500 text-white" : "bg-gray-800 text-gray-500 cursor-not-allowed"}`}>
-            {me?.isReady ? "Prêt — annuler" : `Prêt (${myTracks.length}/${minTracks} min)`}
+              ${me?.isReady ? "bg-green-700 hover:bg-green-600 text-white" : (isCible ? myTracks.length === 1 : myTracks.length >= minTracks) ? "bg-purple-600 hover:bg-purple-500 text-white" : "bg-gray-800 text-gray-500 cursor-not-allowed"}`}>
+            {me?.isReady ? "Prêt — annuler" : isCible ? (myTracks.length === 1 ? "Je suis prêt !" : "Sélectionne 1 musique") : `Prêt (${myTracks.length}/${minTracks} min)`}
           </button>
         </div>
 

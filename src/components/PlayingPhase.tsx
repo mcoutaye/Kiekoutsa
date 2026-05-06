@@ -2,13 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { Play, Eye, Check, Shield, Zap } from "lucide-react";
+import { Play, Eye, Check, Shield, Zap, Volume2, VolumeX, Target } from "lucide-react";
 import { useGame } from "@/contexts/GameContext";
 import ChatPanel from "@/components/ChatPanel";
 import type { RoleName } from "@/types/game";
 
 export default function PlayingPhase() {
-  const { room, playerId, audioSignal, castVote, forceReveal, hostStartMusic, transitionToVoting, policeBlock, fouActivate } = useGame();
+  const { room, playerId, audioSignal, castVote, castCibleVote, forceReveal, hostStartMusic, transitionToVoting, policeBlock, fouActivate } = useGame();
   const audioElRef = useRef<HTMLAudioElement>(null);
   const [progress, setProgress] = useState(100);
   const [, setAudioPlaying] = useState(false);
@@ -16,13 +16,19 @@ export default function PlayingPhase() {
   const hostTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const [pendingVote, setPendingVote] = useState<string | null>(null);
+  const [pendingTarget, setPendingTarget] = useState<string | null>(null);
   const [showPoliceSelect, setShowPoliceSelect] = useState(false);
+  const [volume, setVolume] = useState<number>(() => {
+    if (typeof window === "undefined") return 1;
+    return parseFloat(localStorage.getItem("kiekoutsa_volume") ?? "1");
+  });
 
   if (!room || !room.currentTrack) return null;
 
   const track = room.currentTrack;
   const isHost = room.players.find((p) => p.id === playerId)?.isHost ?? false;
   const myVote = room.myVote ?? null;
+  const isCible = room.settings.gameMode === "cible";
   const shouldPlayAudio =
     room.playbackMode === "sync" ||
     (room.playbackMode === "master" && isHost);
@@ -40,9 +46,9 @@ export default function PlayingPhase() {
   const canFouActivate = isFou && !room.fouActivated && track.addedBy !== playerId && fouActivationsRemaining > 0;
   const chatEnabled = true;
 
-  // Reset pending vote on new track
+  // Reset pending votes on new track
   // eslint-disable-next-line react-hooks/rules-of-hooks
-  useEffect(() => { setPendingVote(null); }, [track.id]);
+  useEffect(() => { setPendingVote(null); setPendingTarget(null); }, [track.id]);
 
   // Start audio + progress when playing_started_at is set (audioSignal changes)
   // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -63,7 +69,7 @@ export default function PlayingPhase() {
     if (shouldPlayAudio && track.previewUrl && audioElRef.current) {
       const audio = audioElRef.current;
       audio.src = track.previewUrl;
-      audio.volume = 1.0;
+      audio.volume = parseFloat(localStorage.getItem("kiekoutsa_volume") ?? "1");
       audio.currentTime = Math.min(elapsed, 29);
       audio.load();
       audio.play().then(() => setAudioPlaying(true)).catch(() => {});
@@ -98,7 +104,11 @@ export default function PlayingPhase() {
   };
 
   const confirmVote = () => {
-    if (pendingVote) castVote(pendingVote);
+    if (isCible) {
+      if (pendingVote && pendingTarget) castCibleVote(pendingVote, pendingTarget);
+    } else {
+      if (pendingVote) castVote(pendingVote);
+    }
   };
 
   return (
@@ -107,6 +117,11 @@ export default function PlayingPhase() {
 
       {/* Track info */}
       <div className="flex flex-col items-center gap-4">
+        {isCible && (
+          <div className="text-xs font-bold text-pink-400 uppercase tracking-widest text-center">
+            Round {room.currentRound ?? 1}/{room.settings.numberOfRounds ?? 3}
+          </div>
+        )}
         <div className="relative">
           <div className={`w-44 h-44 rounded-full overflow-hidden border-4 border-purple-600 shadow-2xl shadow-purple-900/50 ${room.playingStartedAt && progress > 0 ? "vinyl-spin" : ""}`}>
             {track.albumCover ? (
@@ -146,64 +161,147 @@ export default function PlayingPhase() {
           <p className="text-gray-500 text-sm">Le son joue chez le host</p>
         )}
         {!track.previewUrl && <p className="text-orange-400 text-sm">Pas d&apos;extrait disponible</p>}
+
       </div>
 
       <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2">
           {/* Vote section */}
           <div className="w-full max-w-2xl">
-            <h3 className="text-center font-semibold text-gray-400 mb-3 text-xs uppercase tracking-wider">
-              Qui a mis ce son ?
-            </h3>
             {isBlocked && (
               <div className="mb-3 px-4 py-2 rounded-xl bg-red-900/30 border border-red-600 text-red-300 text-sm text-center font-semibold">
                 Tu as été bloqué par le Policier — tu ne peux pas voter ce round
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-2">
-              {room.players.map((p) => {
-                const isSelf = p.id === playerId;
-                const locked = !!myVote || isBlocked;
-                const disabled = (!room.settings.allowSelfVote && isSelf) || locked;
-                const isPending = !locked && pendingVote === p.id;
-                const isConfirmed = myVote === p.id;
-                const voteCount = room.voteCounts[p.id] ?? 0;
+            {isCible ? (
+              <>
+                <h3 className="text-center font-semibold text-gray-400 mb-3 text-xs uppercase tracking-wider">
+                  Qui a mis ce son ?
+                </h3>
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  {room.players.map((p) => {
+                    const locked = !!myVote || isBlocked;
+                    const isPending = !locked && pendingVote === p.id;
+                    const isConfirmed = myVote === p.id;
+                    return (
+                      <button key={p.id} onClick={() => !locked && !isBlocked && setPendingVote(p.id)}
+                        disabled={locked || isBlocked}
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm border-2 transition-all
+                          ${isPending ? "border-purple-500 bg-purple-900/40 text-purple-200"
+                            : isConfirmed ? "border-green-500 bg-green-900/30 text-green-300 cursor-not-allowed"
+                            : locked ? "border-transparent opacity-30 cursor-not-allowed"
+                            : "border-transparent hover:border-purple-500/50 cursor-pointer"}`}
+                        style={{ background: isPending || isConfirmed ? undefined : "var(--surface)" }}>
+                        <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 bg-gray-700">
+                          {p.avatar ? <img src={p.avatar} alt={p.name} className="w-full h-full object-cover" /> : null}
+                        </div>
+                        <span className="flex-1 truncate font-medium text-left">{p.name}</span>
+                        {isConfirmed && <Check size={13} className="text-green-400 flex-shrink-0" />}
+                        {!isConfirmed && room.settings.showVoteCounts && (room.voteCounts[p.id] ?? 0) > 0 && (
+                          <span className="flex-shrink-0 w-5 h-5 rounded-full bg-purple-700 text-white text-xs flex items-center justify-center font-bold">
+                            {room.voteCounts[p.id]}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
 
-                return (
-                  <button key={p.id} onClick={() => !disabled && handleVoteClick(p.id)}
-                    disabled={disabled}
-                    className={`relative flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm border-2 transition-all
-                      ${isPending ? "border-purple-500 bg-purple-900/40 text-purple-200" : isConfirmed ? "border-green-500 bg-green-900/30 text-green-300" : disabled ? "border-transparent opacity-30 cursor-not-allowed" : "border-transparent hover:border-purple-500/50 cursor-pointer"}`}
-                    style={{ background: isPending || isConfirmed ? undefined : "var(--surface)" }}>
-                    <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 bg-gray-700">
-                      {p.avatar ? <img src={p.avatar} alt={p.name} className="w-full h-full object-cover" /> : null}
-                    </div>
-                    <span className="flex-1 truncate font-medium text-left">{p.name}</span>
-                    {room.settings.showVoteCounts && voteCount > 0 && (
-                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-purple-700 text-white text-xs flex items-center justify-center font-bold">
-                        {voteCount}
-                      </span>
-                    )}
+                <h3 className="text-center font-semibold text-gray-400 mb-3 text-xs uppercase tracking-wider flex items-center justify-center gap-1.5">
+                  <Target size={12} className="text-pink-400" /> À qui ce son était-il destiné ?
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {room.players.map((p) => {
+                    const locked = !!myVote || isBlocked;
+                    const isPending = !locked && pendingTarget === p.id;
+                    const isConfirmedTarget = room.myTargetVote === p.id;
+                    return (
+                      <button key={p.id} onClick={() => !locked && !isBlocked && setPendingTarget(p.id)}
+                        disabled={locked || isBlocked}
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm border-2 transition-all
+                          ${isPending ? "border-pink-500 bg-pink-900/40 text-pink-200"
+                            : isConfirmedTarget ? "border-pink-500 bg-pink-900/30 text-pink-200 cursor-not-allowed"
+                            : locked ? "border-transparent opacity-30 cursor-not-allowed"
+                            : "border-transparent hover:border-pink-500/50 cursor-pointer"}`}
+                        style={{ background: isPending || isConfirmedTarget ? undefined : "var(--surface)" }}>
+                        <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 bg-gray-700">
+                          {p.avatar ? <img src={p.avatar} alt={p.name} className="w-full h-full object-cover" /> : null}
+                        </div>
+                        <span className="flex-1 truncate font-medium text-left">{p.name}</span>
+                        {isConfirmedTarget && <Check size={13} className="text-pink-400 flex-shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+                  <span>{room.votedPlayerIds.length}/{room.players.length} ont voté</span>
+                </div>
+
+                {myVote ? (
+                  <p className="text-center text-green-400 text-xs mt-3 flex items-center justify-center gap-1">
+                    <Check size={12} /> Vote verrouillé
+                  </p>
+                ) : isBlocked ? null : (pendingVote && pendingTarget) ? (
+                  <button onClick={confirmVote}
+                    className="w-full mt-3 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 bg-purple-600 hover:bg-purple-500 text-white">
+                    Confirmer mon vote
                   </button>
-                );
-              })}
-            </div>
+                ) : (
+                  <p className="text-center text-gray-600 text-xs mt-3">Sélectionne les deux réponses pour confirmer</p>
+                )}
+              </>
+            ) : (
+              <>
+                <h3 className="text-center font-semibold text-gray-400 mb-3 text-xs uppercase tracking-wider">
+                  Qui a mis ce son ?
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {room.players.map((p) => {
+                    const isSelf = p.id === playerId;
+                    const locked = !!myVote || isBlocked;
+                    const disabled = (!room.settings.allowSelfVote && isSelf) || locked;
+                    const isPending = !locked && pendingVote === p.id;
+                    const isConfirmed = myVote === p.id;
+                    const voteCount = room.voteCounts[p.id] ?? 0;
 
-            <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
-              <span>{room.votedPlayerIds.length}/{room.players.length} ont voté</span>
-            </div>
+                    return (
+                      <button key={p.id} onClick={() => !disabled && handleVoteClick(p.id)}
+                        disabled={disabled}
+                        className={`relative flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm border-2 transition-all
+                          ${isPending ? "border-purple-500 bg-purple-900/40 text-purple-200" : isConfirmed ? "border-green-500 bg-green-900/30 text-green-300" : disabled ? "border-transparent opacity-30 cursor-not-allowed" : "border-transparent hover:border-purple-500/50 cursor-pointer"}`}
+                        style={{ background: isPending || isConfirmed ? undefined : "var(--surface)" }}>
+                        <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 bg-gray-700">
+                          {p.avatar ? <img src={p.avatar} alt={p.name} className="w-full h-full object-cover" /> : null}
+                        </div>
+                        <span className="flex-1 truncate font-medium text-left">{p.name}</span>
+                        {room.settings.showVoteCounts && voteCount > 0 && (
+                          <span className="flex-shrink-0 w-5 h-5 rounded-full bg-purple-700 text-white text-xs flex items-center justify-center font-bold">
+                            {voteCount}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
 
-            {myVote ? (
-              <p className="text-center text-green-400 text-xs mt-3 flex items-center justify-center gap-1">
-                <Check size={12} /> Vote verrouillé
-              </p>
-            ) : isBlocked ? null : pendingVote ? (
-              <button onClick={confirmVote}
-                className="w-full mt-3 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 bg-purple-600 hover:bg-purple-500 text-white">
-                Confirmer mon vote
-              </button>
-            ) : null}
+                <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+                  <span>{room.votedPlayerIds.length}/{room.players.length} ont voté</span>
+                </div>
+
+                {myVote ? (
+                  <p className="text-center text-green-400 text-xs mt-3 flex items-center justify-center gap-1">
+                    <Check size={12} /> Vote verrouillé
+                  </p>
+                ) : isBlocked ? null : pendingVote ? (
+                  <button onClick={confirmVote}
+                    className="w-full mt-3 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 bg-purple-600 hover:bg-purple-500 text-white">
+                    Confirmer mon vote
+                  </button>
+                ) : null}
+              </>
+            )}
 
             {isHost && (
               <button onClick={forceReveal}
@@ -265,6 +363,34 @@ export default function PlayingPhase() {
           <ChatPanel className="h-[28rem]" />
         )}
       </div>
+
+      {/* Volume — fixed bottom-right */}
+      {shouldPlayAudio && (
+        <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 px-3 py-2 rounded-xl shadow-lg"
+          style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+          <button
+            onClick={() => {
+              const v = volume === 0 ? 1 : 0;
+              setVolume(v);
+              localStorage.setItem("kiekoutsa_volume", String(v));
+              if (audioElRef.current) audioElRef.current.volume = v;
+            }}
+            className="text-gray-400 hover:text-white transition-colors flex-shrink-0"
+          >
+            {volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+          </button>
+          <input
+            type="range" min={0} max={1} step={0.05} value={volume}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value);
+              setVolume(v);
+              localStorage.setItem("kiekoutsa_volume", String(v));
+              if (audioElRef.current) audioElRef.current.volume = v;
+            }}
+            className="w-20 sm:w-28 accent-purple-500"
+          />
+        </div>
+      )}
     </div>
   );
 }

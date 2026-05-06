@@ -46,6 +46,7 @@ interface GameContextType {
   hostStartMusic: () => void;
   transitionToVoting: () => void;
   castVote: (suspectedPlayerId: string) => void;
+  castCibleVote: (chooserId: string, targetId: string) => void;
   forceReveal: () => void;
   nextRound: () => void;
   playAgain: () => void;
@@ -288,6 +289,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const hostStartMusic = useCallback(() => action("host-start-music"), [action]);
   const transitionToVoting = useCallback(() => action("transition-to-voting"), [action]);
   const castVote = useCallback((suspectedPlayerId: string) => action("cast-vote", { suspectedPlayerId }), [action]);
+  const castCibleVote = useCallback((chooserId: string, targetId: string) => action("cast-vote", { chooserId, targetId }), [action]);
   const forceReveal = useCallback(() => action("force-reveal"), [action]);
   const nextRound = useCallback(() => action("next-round"), [action]);
   const playAgain = useCallback(() => action("play-again"), [action]);
@@ -327,7 +329,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       clearDisconnectedReason, clearError, createRoom, joinRoom, leaveRoom, sendChat, addTrack, removeTrack, setReady,
       startSelection, startSelectionConfirmed, startModeSelection, setPlaybackMode, setSettings,
       startGame, hostStartMusic, transitionToVoting,
-      castVote, forceReveal, nextRound, playAgain, kickPlayer,
+      castVote, castCibleVote, forceReveal, nextRound, playAgain, kickPlayer,
       guesserPickTrack, policeBlock, fouActivate,
     }}>
       {children}

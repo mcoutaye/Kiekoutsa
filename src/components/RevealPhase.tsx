@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { ArrowRight, Check, X, Search, Ghost, Zap, Shield } from "lucide-react";
+import { ArrowRight, Check, X, Search, Ghost, Zap, Shield, Target } from "lucide-react";
 import { useGame } from "@/contexts/GameContext";
 import ChatPanel from "@/components/ChatPanel";
 
@@ -12,7 +12,12 @@ export default function RevealPhase() {
   const last = room.roundResults[room.roundResults.length - 1];
   const isHost = room.players.find((p) => p.id === playerId)?.isHost ?? false;
   const track = room.currentTrack;
-  const hasMore = room.currentTrackIndex + 1 < room.totalTracks;
+  const isCible = room.settings.gameMode === "cible";
+  const currentRound = room.currentRound ?? 1;
+  const numberOfRounds = room.settings.numberOfRounds ?? 3;
+  const hasMoreTracksThisRound = room.currentTrackIndex + 1 < room.totalTracks;
+  const hasMoreRounds = currentRound < numberOfRounds;
+  const hasMore = isCible ? (hasMoreTracksThisRound || hasMoreRounds) : room.currentTrackIndex + 1 < room.totalTracks;
   const isOwner = last?.ownerId === playerId;
   const anonymous = room.settings.anonymousVotes;
   const isTaupeRound = last?.ownerId === room.taupePlayerId;
@@ -24,9 +29,16 @@ export default function RevealPhase() {
     <div className="flex-1 flex flex-col items-center justify-center p-6 gap-5 max-w-5xl mx-auto w-full">
       <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 flex flex-col items-center justify-center gap-5">
+          {isCible && (
+            <div className="text-xs font-bold text-pink-400 uppercase tracking-widest">
+              Round {currentRound}/{numberOfRounds}
+            </div>
+          )}
           {/* Owner reveal */}
           <div className="text-center">
-            <p className="text-gray-400 text-xs uppercase tracking-widest mb-3">C&apos;était le son de…</p>
+            <p className="text-gray-400 text-xs uppercase tracking-widest mb-3">
+              {isCible ? "C’était le son de… destiné à…" : "C’était le son de…"}
+            </p>
             <div className="inline-flex items-center gap-4 px-6 py-4 rounded-2xl"
               style={{ background: "linear-gradient(135deg,#4c1d95,#831843)", border: "2px solid #a855f7" }}>
               <div className="w-14 h-14 rounded-full overflow-hidden flex-shrink-0 bg-gray-700">
@@ -38,6 +50,15 @@ export default function RevealPhase() {
                 <p className="text-3xl font-black text-white">{last?.ownerName}</p>
                 {isOwner && <p className="text-purple-300 text-sm">C&apos;est toi !</p>}
               </div>
+              {isCible && last?.targetName && (
+                <>
+                  <Target size={20} className="text-pink-400 flex-shrink-0" />
+                  <div className="text-left">
+                    <p className="text-3xl font-black text-pink-300">{last.targetName}</p>
+                    {last.targetId === playerId && <p className="text-pink-400 text-sm">C&apos;est toi la cible !</p>}
+                  </div>
+                </>
+              )}
             </div>
             {track && (
               <div className="flex items-center justify-center gap-3 mt-4">
@@ -101,6 +122,40 @@ export default function RevealPhase() {
                       </div>
                     ))}
                 </div>
+              ) : isCible ? (
+                // Cible mode: show chooser guess + target guess per voter
+                <div className="space-y-2">
+                  {last.votes.length === 0 ? (
+                    <p className="text-gray-500 text-sm text-center py-2">Personne n&apos;a voté</p>
+                  ) : (
+                    last.votes.map((v, i) => {
+                      const pts = last.pointsEarned[v.voterId] ?? 0;
+                      return (
+                        <div key={i} className="flex items-start gap-2 text-sm">
+                          <div className="w-5 h-5 rounded-full overflow-hidden bg-gray-700 flex-shrink-0 mt-0.5">
+                            {getPlayer(v.voterId)?.avatar ? <img src={getPlayer(v.voterId)!.avatar} alt="" className="w-full h-full object-cover" /> : null}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span className={`font-medium ${v.voterId === playerId ? "text-purple-300" : "text-gray-300"}`}>{v.voterName}</span>
+                            <div className="flex items-center gap-1 text-xs mt-0.5 flex-wrap">
+                              <span className="text-gray-500">auteur:</span>
+                              <span className={v.wasCorrect ? "text-green-400 font-medium" : "text-red-400 font-medium"}>{v.suspectedName}</span>
+                              {v.wasCorrect ? <Check size={11} className="text-green-400" /> : <X size={11} className="text-red-400" />}
+                              <span className="text-gray-600 mx-1">|</span>
+                              <Target size={10} className="text-pink-400" />
+                              <span className="text-gray-500">cible:</span>
+                              <span className={v.targetWasCorrect ? "text-green-400 font-medium" : "text-red-400 font-medium"}>{v.targetGuessName ?? "—"}</span>
+                              {v.targetWasCorrect ? <Check size={11} className="text-green-400" /> : <X size={11} className="text-red-400" />}
+                            </div>
+                          </div>
+                          <span className={`text-xs font-bold flex-shrink-0 ${pts > 0 ? "text-yellow-400" : "text-gray-600"}`}>
+                            {pts > 0 ? `+${pts}` : "–"}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               ) : (
                 // Non-anonymous: show who voted for whom
                 <div className="space-y-1.5">
@@ -160,7 +215,10 @@ export default function RevealPhase() {
           {isHost ? (
             <button onClick={nextRound}
               className="flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-lg transition-all active:scale-95 bg-purple-600 hover:bg-purple-500 text-white">
-              {hasMore ? "Musique suivante" : "Voir les scores"} <ArrowRight size={18} />
+              {isCible
+                ? (hasMoreTracksThisRound ? "Musique suivante" : hasMoreRounds ? "Round suivant" : "Voir les scores")
+                : (hasMore ? "Musique suivante" : "Voir les scores")
+              } <ArrowRight size={18} />
             </button>
           ) : (
             <p className="text-gray-500 text-sm">En attente du host…</p>

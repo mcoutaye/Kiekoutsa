@@ -37,6 +37,9 @@ export interface RoomDB {
   fou_activated: boolean;
   fou_activations_used: number;
   roles: Record<string, string> | null;
+  target_assignments: Record<string, string> | null;
+  target_votes: Record<string, string>;
+  current_round: number;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -55,6 +58,25 @@ export function shuffleArray<T>(arr: T[]): T[] {
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
+}
+
+export function generateDerangement(ids: string[]): string[] {
+  if (ids.length < 2) return [...ids];
+  let result: string[];
+  do {
+    result = shuffleArray(ids);
+  } while (result.some((v, i) => v === ids[i]));
+  return result;
+}
+
+function assignCibleTargets(ids: string[]): Record<string, string> {
+  const others = (id: string) => ids.filter((x) => x !== id);
+  return Object.fromEntries(
+    ids.map((id) => {
+      const pool = others(id);
+      return [id, pool[Math.floor(Math.random() * pool.length)]];
+    })
+  );
 }
 
 export function computeVoteCounts(
@@ -99,6 +121,12 @@ export function sanitizeRoom(room: RoomDB, myPlayerId: string): ClientRoom {
   const roles = (room as any).roles as Record<string, string> | null ?? null;
   const myRole = roles?.[myPlayerId] as RoleName ?? null;
   const guesserPick = (room as any).guesser_pick as Track | null ?? null;
+  const targetAssignments = (room as any).target_assignments as Record<string, string> | null ?? null;
+  const targetVotes = (room as any).target_votes as Record<string, string> ?? {};
+  const myTargetId = targetAssignments?.[myPlayerId] ?? null;
+  const myTargetName = myTargetId ? (players.find((p: any) => p.id === myTargetId)?.name ?? null) : null;
+  const myTargetVote = targetVotes[myPlayerId] ?? null;
+  const targetVotedPlayerIds = Object.keys(targetVotes);
 
   const canSeeGuesserPick = myRole === "guesser" || room.phase === "end" || room.phase === "reveal";
   const guesserPickId = canSeeGuesserPick ? guesserPick?.id ?? null : null;
@@ -144,6 +172,11 @@ export function sanitizeRoom(room: RoomDB, myPlayerId: string): ClientRoom {
     fouActivationsUsed: (room as any).fou_activations_used ?? 0,
     updatedAt: room.updated_at ?? "",
     guesserPick: guesserPickInfo,
+    myTargetId,
+    myTargetName,
+    myTargetVote,
+    targetVotedPlayerIds,
+    currentRound: (room as any).current_round ?? 1,
   };
 }
 
@@ -229,13 +262,16 @@ export function applyAction(
       if (!Array.isArray(s.enabledRoles)) s.enabledRoles = [];
       s.policeBlocksPerGame = Math.max(1, Math.min(5, s.policeBlocksPerGame ?? 1));
       s.fouActivationsPerGame = Math.max(1, Math.min(5, s.fouActivationsPerGame ?? 1));
+      s.numberOfRounds = Math.max(1, Math.min(10, s.numberOfRounds ?? 3));
       return { update: { settings: s, updated_at: now } };
     }
 
     case "add-track": {
       if (room.phase !== "selection" || !player) return { error: "Non autorisé" };
-      if (player.tracks.length >= room.settings.maxTracks)
-        return { error: `Maximum ${room.settings.maxTracks} musiques` };
+      const isCible = room.settings.gameMode === "cible";
+      const effectiveMax = isCible ? 1 : room.settings.maxTracks;
+      if (player.tracks.length >= effectiveMax)
+        return { error: isCible ? "1 musique max en Mode Cible" : `Maximum ${room.settings.maxTracks} musiques` };
       if (player.tracks.find((t) => t.id === payload.id)) return { update: {} };
       const guesserPick = (room as any).guesser_pick as Track | null ?? null;
       const roles = (room as any).roles as Record<string, string> | null ?? null;
@@ -254,8 +290,15 @@ export function applyAction(
 
     case "set-ready": {
       if (room.phase !== "selection" || !player) return { error: "Non autorisé" };
-      if (payload.ready && player.tracks.length < room.settings.minTracks)
-        return { error: `Sélectionne au moins ${room.settings.minTracks} musiques` };
+      const isCible = room.settings.gameMode === "cible";
+      if (payload.ready) {
+        if (isCible) {
+          if (player.tracks.length !== 1)
+            return { error: "Sélectionne 1 musique pour ta cible" };
+        } else if (player.tracks.length < room.settings.minTracks) {
+          return { error: `Sélectionne au moins ${room.settings.minTracks} musiques` };
+        }
+      }
       player.is_ready = payload.ready;
       return { update: { players: [...room.players], updated_at: now } };
     }
@@ -287,6 +330,13 @@ export function applyAction(
       }
 
       const nextPhase: GamePhase = enabledRoles.length > 0 ? "role-reveal" : "selection";
+
+      let target_assignments: Record<string, string> | null = null;
+      if (room.settings.gameMode === "cible" && room.players.length >= 2) {
+        const pids = room.players.map((p) => p.id);
+        target_assignments = assignCibleTargets(pids);
+      }
+
       return {
         update: {
           phase: nextPhase,
@@ -294,6 +344,9 @@ export function applyAction(
           roles,
           guesser_pick: null,
           police_blocks_used: 0,
+          target_assignments,
+          target_votes: {},
+          current_round: 1,
           updated_at: now,
         },
       };
@@ -308,6 +361,27 @@ export function applyAction(
       if (!isHost) return { error: "Non autorisé" };
       if (!room.players.every((p) => p.is_ready))
         return { error: "Tous les joueurs doivent être prêts" };
+      // Cible mode round 2+: playback_mode already set, skip mode-selection
+      if (room.settings.gameMode === "cible" && room.playback_mode) {
+        const allTracks = room.players.flatMap((p) => p.tracks);
+        const queue = shuffleArray(allTracks);
+        const firstTrack = queue[0] ?? null;
+        const startedAt = room.settings.autoPlay ? now : null;
+        return {
+          update: {
+            phase: "playing",
+            track_queue: queue,
+            current_track_index: 0,
+            current_track: firstTrack,
+            votes: {},
+            target_votes: {},
+            police_blocked_id: null,
+            fou_activated: false,
+            playing_started_at: startedAt,
+            updated_at: now,
+          },
+        };
+      }
       return { update: { phase: "mode-selection", updated_at: now } };
     }
 
@@ -351,6 +425,9 @@ export function applyAction(
 
     case "transition-to-voting": {
       if (!isHost || room.phase !== "playing") return { update: {} };
+      if (room.settings.gameMode === "cible") {
+        return { update: { phase: "voting", roles: room.roles ?? null, updated_at: now } };
+      }
       if (isGuesserTrack(room)) {
         return { update: { ...computeGuesserReveal(room), roles: room.roles ?? null, current_track: room.current_track, current_track_index: room.current_track_index, updated_at: now } };
       }
@@ -361,15 +438,33 @@ export function applyAction(
       if (room.phase !== "playing" && room.phase !== "voting")
         return { error: "Vote pas ouvert" };
       if (!player) return { error: "Joueur introuvable" };
-      if (!room.settings.allowSelfVote && payload.suspectedPlayerId === playerId)
-        return { error: "Tu ne peux pas voter pour toi-même" };
 
       const policeBlockedId = (room as any).police_blocked_id as string | null ?? null;
       if (policeBlockedId === playerId) return { error: "Tu es bloqué par le policier ce round" };
 
-      const voteRoles = (room as any).roles as Record<string, string> | null ?? null;
-      if (voteRoles?.[playerId] === "fou" && payload.suspectedPlayerId === playerId)
-        return { error: "Le Fou ne peut pas voter pour lui-même" };
+      const isCible = room.settings.gameMode === "cible";
+
+      if (isCible) {
+        const { chooserId, targetId } = payload as { chooserId: string; targetId: string };
+        if (!chooserId || !targetId) return { error: "Payload invalide pour mode cible" };
+        if (!room.players.find((p) => p.id === chooserId)) return { error: "Joueur cible introuvable" };
+        if (!room.players.find((p) => p.id === targetId)) return { error: "Joueur cible introuvable" };
+
+        const newVotes = { ...room.votes, [playerId]: chooserId };
+        const currentTargetVotes = (room as any).target_votes as Record<string, string> ?? {};
+        const newTargetVotes = { ...currentTargetVotes, [playerId]: targetId };
+
+        const votingPlayerIds = room.players.filter((p) => p.id !== policeBlockedId).map((p) => p.id);
+        const allVoted = votingPlayerIds.every((pid) => newVotes[pid] !== undefined && newTargetVotes[pid] !== undefined);
+
+        if (allVoted && room.settings.autoReveal) {
+          return { update: { votes: newVotes, target_votes: newTargetVotes, ...computeCibleReveal(room, newVotes, newTargetVotes), roles: room.roles ?? null, updated_at: now } };
+        }
+        return { update: { votes: newVotes, target_votes: newTargetVotes, updated_at: now } };
+      }
+
+      if (!room.settings.allowSelfVote && payload.suspectedPlayerId === playerId)
+        return { error: "Tu ne peux pas voter pour toi-même" };
 
       const allPlayers = [...room.players];
       const taupePlayerId = (room as any).taupe_player_id as string | null ?? null;
@@ -398,6 +493,10 @@ export function applyAction(
 
     case "force-reveal": {
       if (!isHost) return { error: "Non autorisé" };
+      if (room.settings.gameMode === "cible") {
+        const tv = (room as any).target_votes as Record<string, string> ?? {};
+        return { update: { ...computeCibleReveal(room, room.votes, tv), roles: room.roles ?? null, updated_at: now } };
+      }
       if (isGuesserTrack(room)) {
         return { update: { ...computeGuesserReveal(room), roles: room.roles ?? null, current_track: room.current_track, current_track_index: room.current_track_index, updated_at: now } };
       }
@@ -407,6 +506,56 @@ export function applyAction(
     case "next-round": {
       if (!isHost || room.phase !== "reveal") return { error: "Non autorisé" };
       const nextIdx = room.current_track_index + 1;
+
+      if (room.settings.gameMode === "cible") {
+        const currentRound = (room as any).current_round as number ?? 1;
+        const numberOfRounds = room.settings.numberOfRounds ?? 3;
+
+        if (nextIdx < room.track_queue.length) {
+          // More tracks in this round
+          const nextTrack = room.track_queue[nextIdx];
+          const startedAt = room.settings.autoPlay ? now : null;
+          return {
+            update: {
+              phase: "playing",
+              current_track_index: nextIdx,
+              current_track: nextTrack,
+              votes: {},
+              target_votes: {},
+              police_blocked_id: null,
+              fou_activated: false,
+              playing_started_at: startedAt,
+              roles: room.roles ?? null,
+              updated_at: now,
+            },
+          };
+        }
+
+        // End of this round's tracks
+        if (currentRound >= numberOfRounds) {
+          return { update: { phase: "end", roles: room.roles ?? null, updated_at: now } };
+        }
+
+        // More rounds: regenerate targets, reset players, back to selection
+        const pids = room.players.map((p) => p.id);
+        const newTargetAssignments = assignCibleTargets(pids);
+        const resetPlayers = room.players.map((p) => ({ ...p, is_ready: false, tracks: [] }));
+        return {
+          update: {
+            phase: "selection",
+            players: resetPlayers,
+            target_assignments: newTargetAssignments,
+            target_votes: {},
+            votes: {},
+            current_round: currentRound + 1,
+            police_blocked_id: null,
+            fou_activated: false,
+            updated_at: now,
+          },
+        };
+      }
+
+      // Non-cible modes: original logic
       if (nextIdx >= room.track_queue.length) {
         return { update: { phase: "end", roles: room.roles ?? null, updated_at: now } };
       }
@@ -418,6 +567,7 @@ export function applyAction(
           current_track_index: nextIdx,
           current_track: nextTrack,
           votes: {},
+          target_votes: {},
           police_blocked_id: null,
           fou_activated: false,
           playing_started_at: startedAt,
@@ -438,6 +588,8 @@ export function applyAction(
           votes: {}, round_results: [], chat_messages: [], playing_started_at: null,
           roles: null, taupe_player_id: null, guesser_pick: null,
           police_blocked_id: null, police_blocks_used: 0, fou_activated: false, fou_activations_used: 0,
+          target_assignments: null, target_votes: {},
+          current_round: 1,
           updated_at: now,
         },
       };
@@ -519,6 +671,71 @@ function computeGuesserReveal(room: RoomDB): Partial<RoomDB> {
   };
 }
 
+function computeCibleReveal(room: RoomDB, votes: Record<string, string>, targetVotes: Record<string, string>): Partial<RoomDB> {
+  if (!room.current_track) return { phase: "reveal" };
+
+  const track = room.current_track;
+  const ownerId = track.addedBy;
+  const owner = room.players.find((p) => p.id === ownerId);
+  const targetAssignments = (room as any).target_assignments as Record<string, string> | null ?? null;
+  const targetId = targetAssignments?.[ownerId] ?? null;
+  const targetPlayer = targetId ? room.players.find((p) => p.id === targetId) : null;
+  const targetName = targetPlayer?.name ?? null;
+
+  const voteResults: VoteResult[] = Object.entries(votes).map(([vid, chooserGuessId]) => {
+    const targetGuessId = targetVotes[vid] ?? null;
+    const chooserCorrect = chooserGuessId === ownerId;
+    const targetCorrect = !!targetId && targetGuessId === targetId;
+    return {
+      voterId: vid,
+      voterName: room.players.find((p) => p.id === vid)?.name ?? "Inconnu",
+      suspectedId: chooserGuessId,
+      suspectedName: room.players.find((p) => p.id === chooserGuessId)?.name ?? "Inconnu",
+      wasCorrect: chooserCorrect,
+      targetGuessId: targetGuessId ?? undefined,
+      targetGuessName: targetGuessId ? (room.players.find((p) => p.id === targetGuessId)?.name ?? "Inconnu") : undefined,
+      targetWasCorrect: targetCorrect,
+    };
+  });
+
+  const pointsEarned: Record<string, number> = {};
+  for (const vr of voteResults) {
+    if (vr.voterId === ownerId) continue;
+    if (vr.wasCorrect && vr.targetWasCorrect) {
+      pointsEarned[vr.voterId] = (pointsEarned[vr.voterId] ?? 0) + 4;
+    } else if (vr.wasCorrect) {
+      pointsEarned[vr.voterId] = (pointsEarned[vr.voterId] ?? 0) + 2;
+    } else if (vr.targetWasCorrect) {
+      pointsEarned[vr.voterId] = (pointsEarned[vr.voterId] ?? 0) + 1;
+    }
+  }
+
+  const updatedPlayers = room.players.map((p) => ({
+    ...p,
+    score: p.score + (pointsEarned[p.id] ?? 0),
+  }));
+
+  const roundResult: RoundResult = {
+    track: {
+      id: track.id, name: track.name, artists: track.artists,
+      albumCover: track.albumCover, previewUrl: track.previewUrl,
+      addedBy: track.addedBy, addedByName: owner?.name ?? "Inconnu",
+    },
+    ownerId,
+    ownerName: owner?.name ?? "Inconnu",
+    votes: voteResults,
+    pointsEarned,
+    targetId: targetId ?? undefined,
+    targetName: targetName ?? undefined,
+  };
+
+  return {
+    phase: "reveal",
+    players: updatedPlayers,
+    round_results: [...room.round_results, roundResult],
+  };
+}
+
 function computeReveal(room: RoomDB, votes: Record<string, string>): Partial<RoomDB> {
   if (!room.current_track) return { phase: "reveal" };
 
@@ -565,7 +782,8 @@ function computeReveal(room: RoomDB, votes: Record<string, string>): Partial<Roo
   }
 
   if (fouActivated && fouId) {
-    const fouVoteCount = voteResults.filter((v) => v.suspectedId === fouId).length;
+    // Self-votes don't count for Fou power — prevents the exploit
+    const fouVoteCount = voteResults.filter((v) => v.suspectedId === fouId && v.voterId !== fouId).length;
     if (fouVoteCount > 0) {
       pointsEarned[fouId] = (pointsEarned[fouId] ?? 0) + fouVoteCount;
     }

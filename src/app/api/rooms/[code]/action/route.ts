@@ -104,6 +104,22 @@ export async function POST(
     }
   }
 
+  // Refresh Deezer preview URL when advancing to a new track (CDN URLs expire after ~1h)
+  if (action === "next-round" && (finalUpd as any).current_track?.id) {
+    try {
+      const dRes = await fetch(`https://api.deezer.com/track/${(finalUpd as any).current_track.id}`);
+      if (dRes.ok) {
+        const dData = await dRes.json();
+        if (dData.preview) {
+          (finalUpd as any).current_track = {
+            ...(finalUpd as any).current_track,
+            previewUrl: (dData.preview as string).replace(/^http:\/\//, "https://"),
+          };
+        }
+      }
+    } catch { /* use stored URL as fallback */ }
+  }
+
   // If leave-room leaves the room empty, delete it immediately
   if (action === "leave-room" && Array.isArray(finalUpd.players) && finalUpd.players.length === 0) {
     await sb.from("rooms").delete().eq("code", code.toUpperCase());
