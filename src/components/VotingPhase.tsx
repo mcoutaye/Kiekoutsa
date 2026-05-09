@@ -87,13 +87,17 @@ export default function VotingPhase() {
                   {room.players.map((p) => {
                     const locked = !!myVote || isBlocked;
                     const isPending = !locked && pendingVote === p.id;
+                    const isConfirmed = myVote === p.id;
                     const voteCount = room.voteCounts[p.id] ?? 0;
                     const hasVoted = room.votedPlayerIds.includes(p.id);
                     return (
                       <button key={p.id} onClick={() => !locked && setPendingVote(p.id)} disabled={locked}
                         className={`relative flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left
-                          ${isPending ? "border-purple-500 bg-purple-900/40" : locked ? "border-transparent opacity-40 cursor-not-allowed" : "border-transparent hover:border-purple-500/50 cursor-pointer"}`}
-                        style={{ background: isPending ? undefined : "var(--surface)" }}>
+                          ${isPending ? "border-purple-500 bg-purple-900/40"
+                            : isConfirmed ? "border-green-500 bg-green-900/30 cursor-not-allowed"
+                            : locked ? "border-transparent opacity-30 cursor-not-allowed"
+                            : "border-transparent hover:border-purple-500/50 cursor-pointer"}`}
+                        style={{ background: isPending || isConfirmed ? undefined : "var(--surface)" }}>
                         <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-gray-700">
                           {p.avatar ? <img src={p.avatar} alt={p.name} className="w-full h-full object-cover" /> : null}
                         </div>
@@ -101,7 +105,8 @@ export default function VotingPhase() {
                           <span className="block font-semibold truncate">{p.name}</span>
                         </div>
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                          {room.settings.showVoteCounts && voteCount > 0 && (
+                          {isConfirmed && <Check size={14} className="text-green-400" />}
+                          {!isConfirmed && room.settings.showVoteCounts && voteCount > 0 && (
                             <span className="w-6 h-6 rounded-full bg-purple-700 text-white text-xs flex items-center justify-center font-bold">{voteCount}</span>
                           )}
                           {room.settings.showVoteCounts && hasVoted && <div className="w-2 h-2 rounded-full bg-green-500" title="A voté" />}
@@ -120,15 +125,20 @@ export default function VotingPhase() {
                   {room.players.map((p) => {
                     const locked = !!myVote || isBlocked;
                     const isPending = !locked && pendingTarget === p.id;
+                    const isConfirmedTarget = room.myTargetVote === p.id;
                     return (
                       <button key={p.id} onClick={() => !locked && setPendingTarget(p.id)} disabled={locked}
                         className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left
-                          ${isPending ? "border-pink-500 bg-pink-900/40" : locked ? "border-transparent opacity-40 cursor-not-allowed" : "border-transparent hover:border-pink-500/50 cursor-pointer"}`}
-                        style={{ background: isPending ? undefined : "var(--surface)" }}>
+                          ${isPending ? "border-pink-500 bg-pink-900/40"
+                            : isConfirmedTarget ? "border-pink-500 bg-pink-900/30 cursor-not-allowed"
+                            : locked ? "border-transparent opacity-30 cursor-not-allowed"
+                            : "border-transparent hover:border-pink-500/50 cursor-pointer"}`}
+                        style={{ background: isPending || isConfirmedTarget ? undefined : "var(--surface)" }}>
                         <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-gray-700">
                           {p.avatar ? <img src={p.avatar} alt={p.name} className="w-full h-full object-cover" /> : null}
                         </div>
                         <span className="block font-semibold truncate flex-1 min-w-0">{p.name}</span>
+                        {isConfirmedTarget && <Check size={14} className="text-pink-400 flex-shrink-0" />}
                       </button>
                     );
                   })}

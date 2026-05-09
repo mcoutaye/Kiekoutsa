@@ -404,6 +404,7 @@ export function applyAction(
           current_track: firstTrack,
           phase: "playing",
           votes: {},
+          target_votes: {},
           round_results: [],
           playing_started_at: startedAt,
           taupe_player_id: null,
