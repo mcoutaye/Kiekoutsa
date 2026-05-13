@@ -263,6 +263,7 @@ export function applyAction(
       s.policeBlocksPerGame = Math.max(1, Math.min(5, s.policeBlocksPerGame ?? 1));
       s.fouActivationsPerGame = Math.max(1, Math.min(5, s.fouActivationsPerGame ?? 1));
       s.numberOfRounds = Math.max(1, Math.min(10, s.numberOfRounds ?? 3));
+      s.playlistSwapsAllowed = Math.max(0, Math.min(5, s.playlistSwapsAllowed ?? 2));
       return { update: { settings: s, updated_at: now } };
     }
 

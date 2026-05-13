@@ -23,11 +23,13 @@ export interface RoomSettings {
   anonymousVotes: boolean;
   showVoteCounts: boolean;
   showAllTracksEnd: boolean;
-  gameMode: "basique" | "taupe" | "cible";
+  gameMode: "basique" | "taupe" | "cible" | "playlist";
   enabledRoles: RoleName[];
   policeBlocksPerGame: number;
   fouActivationsPerGame: number;
   numberOfRounds: number;
+  playlistSwapsAllowed: number;
+  showPlaylistTracks: boolean;
 }
 
 export const DEFAULT_SETTINGS: RoomSettings = {
@@ -44,6 +46,8 @@ export const DEFAULT_SETTINGS: RoomSettings = {
   policeBlocksPerGame: 1,
   fouActivationsPerGame: 1,
   numberOfRounds: 3,
+  playlistSwapsAllowed: 2,
+  showPlaylistTracks: true,
 };
 
 export interface Track {

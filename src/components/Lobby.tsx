@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useGame } from "@/contexts/GameContext";
-import { Crown, Settings, ChevronDown, ChevronUp, Users, Eye, EyeOff, Copy, Check, UserX, Zap, Shield, Search, Target, type LucideIcon } from "lucide-react";
+import { Crown, Settings, ChevronDown, ChevronUp, Users, Eye, EyeOff, Copy, Check, UserX, Zap, Shield, Search, Target, Music, type LucideIcon } from "lucide-react";
 import ChatPanel from "@/components/ChatPanel";
 import type { RoleName } from "@/types/game";
 
@@ -63,7 +63,7 @@ export default function Lobby() {
         <div className="order-1 flex flex-col gap-3">
           <h2 className="text-xs font-medium text-gray-400 uppercase tracking-widest">Mode de jeu</h2>
           <div className="rounded-2xl p-4 flex flex-col gap-3" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-            {(["basique", "taupe", "cible"] as const).map((mode) => {
+            {(["basique", "taupe", "cible", "playlist"] as const).map((mode) => {
               const active = s.gameMode === mode;
               return (
                 <button key={mode}
@@ -77,11 +77,13 @@ export default function Lobby() {
                     {mode === "basique" && "Basique"}
                     {mode === "taupe" && <span className="flex items-center gap-1.5"><Search size={13} className="text-purple-400" /> Mode Taupe</span>}
                     {mode === "cible" && <span className="flex items-center gap-1.5"><Target size={13} className="text-pink-400" /> Mode Cible</span>}
+                    {mode === "playlist" && <span className="flex items-center gap-1.5"><Music size={13} className="text-green-400" /> Mode Liké</span>}
                   </span>
                   <span className="text-xs text-gray-500 mt-0.5">
                     {mode === "basique" && "Partie classique, devinez qui a mis chaque son."}
                     {mode === "taupe" && "Un joueur IA s'infiltre. Trouvez la Taupe !"}
                     {mode === "cible" && "Chaque joueur reçoit une cible secrète. Trouvez qui a mis chaque son ET à qui il était destiné !"}
+                    {mode === "playlist" && "Les musiques sont piochées depuis vos playlist titres likés Spotify."}
                   </span>
                 </button>
               );
@@ -178,6 +180,45 @@ export default function Lobby() {
                       <input type="range" min={1} max={10} value={s.numberOfRounds ?? 3}
                         onChange={(e) => setSettings({ numberOfRounds: Number(e.target.value) })}
                         className="w-full accent-pink-500" />
+                    </div>
+                  ) : s.gameMode === "playlist" ? (
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-xs font-medium text-gray-400 mb-2">
+                          Musiques par joueur : {s.minTracks} – {s.maxTracks}
+                        </p>
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1">
+                            <label className="text-xs text-gray-500">Min</label>
+                            <input type="range" min={1} max={5} value={s.minTracks}
+                              onChange={(e) => setSettings({ minTracks: Number(e.target.value) })}
+                              className="w-full accent-green-500" />
+                          </div>
+                          <div className="flex-1">
+                            <label className="text-xs text-gray-500">Max</label>
+                            <input type="range" min={s.minTracks} max={10} value={s.maxTracks}
+                              onChange={(e) => setSettings({ maxTracks: Number(e.target.value) })}
+                              className="w-full accent-green-500" />
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-gray-400 mb-2">
+                          Swaps autorisés par joueur : <span className="text-white font-bold">{s.playlistSwapsAllowed ?? 2}</span>
+                        </p>
+                        <input type="range" min={0} max={5} value={s.playlistSwapsAllowed ?? 2}
+                          onChange={(e) => setSettings({ playlistSwapsAllowed: Number(e.target.value) })}
+                          className="w-full accent-green-500" />
+                      </div>
+                      {(s.playlistSwapsAllowed ?? 2) === 0 && (
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-xs text-gray-300">Montrer les musiques piochées avant de jouer</span>
+                          <Toggle
+                            checked={s.showPlaylistTracks ?? true}
+                            onChange={(v) => setSettings({ showPlaylistTracks: v })}
+                          />
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div>
