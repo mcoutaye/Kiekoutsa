@@ -2,12 +2,28 @@ import { NextRequest, NextResponse } from "next/server";
 import type { SpotifyTrack } from "@/types/game";
 
 async function fetchSpotifyLiked(token: string, count: number): Promise<{ name: string; artist: string }[]> {
-  const tracks: { name: string; artist: string }[] = [];
-  let url: string | null = `https://api.spotify.com/v1/me/tracks?limit=50`;
+  const headers = { Authorization: `Bearer ${token}` };
 
-  while (url && tracks.length < count * 3) {
+  // Get total count first
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const totalRes: any = await fetch("https://api.spotify.com/v1/me/tracks?limit=1", { headers });
+  if (!totalRes.ok) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const totalData: any = await totalRes.json();
+  const total: number = totalData.total ?? 0;
+  if (total === 0) return [];
+
+  // Pick a random offset so we sample from the entire library, not just recent tracks
+  const need = count * 3;
+  const maxOffset = Math.max(0, total - need);
+  const offset = Math.floor(Math.random() * (maxOffset + 1));
+
+  const tracks: { name: string; artist: string }[] = [];
+  let url: string | null = `https://api.spotify.com/v1/me/tracks?limit=50&offset=${offset}`;
+
+  while (url && tracks.length < need) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const res: any = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const res: any = await fetch(url, { headers });
     if (!res.ok) break;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data: any = await res.json();
