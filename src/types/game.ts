@@ -30,6 +30,7 @@ export interface RoomSettings {
   numberOfRounds: number;
   playlistSwapsAllowed: number;
   showPlaylistTracks: boolean;
+  roleCounts: Partial<Record<string, number>>;
 }
 
 export const DEFAULT_SETTINGS: RoomSettings = {
@@ -48,6 +49,7 @@ export const DEFAULT_SETTINGS: RoomSettings = {
   numberOfRounds: 3,
   playlistSwapsAllowed: 2,
   showPlaylistTracks: true,
+  roleCounts: {},
 };
 
 export interface Track {

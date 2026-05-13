@@ -102,7 +102,7 @@ export default function EndScreen() {
           {/* Role reveals */}
           {room.allRoles && (
             <div className="w-full rounded-2xl p-4 mb-4" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-              <h3 className="font-bold text-xs uppercase tracking-wider text-gray-400 mb-3">Rôles secrets</h3>
+              <h3 className="font-bold text-xs uppercase tracking-wider text-gray-400 mb-3">Rôles</h3>
               <div className="space-y-1.5">
                 {room.players.map((p) => {
                   const role = room.allRoles![p.id];

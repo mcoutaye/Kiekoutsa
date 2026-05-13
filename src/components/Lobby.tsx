@@ -75,9 +75,9 @@ export default function Lobby() {
                   style={{ background: active ? undefined : "var(--bg)" }}>
                   <span className="font-bold text-sm text-white">
                     {mode === "basique" && "Basique"}
-                    {mode === "taupe" && <span className="flex items-center gap-1.5"><Search size={13} className="text-purple-400" /> Mode Taupe</span>}
-                    {mode === "cible" && <span className="flex items-center gap-1.5"><Target size={13} className="text-pink-400" /> Mode Cible</span>}
-                    {mode === "playlist" && <span className="flex items-center gap-1.5"><Music size={13} className="text-green-400" /> Mode Liké</span>}
+                    {mode === "taupe" && <span className="flex items-center gap-1.5"><Search size={13} className="text-purple-400" /> Taupe</span>}
+                    {mode === "cible" && <span className="flex items-center gap-1.5"><Target size={13} className="text-pink-400" /> Cible</span>}
+                    {mode === "playlist" && <span className="flex items-center gap-1.5"><Music size={13} className="text-green-400" /> Likés</span>}
                   </span>
                   <span className="text-xs text-gray-500 mt-0.5">
                     {mode === "basique" && "Partie classique, devinez qui a mis chaque son."}
@@ -206,7 +206,7 @@ export default function Lobby() {
                         <p className="text-xs font-medium text-gray-400 mb-2">
                           Swaps autorisés par joueur : <span className="text-white font-bold">{s.playlistSwapsAllowed ?? 2}</span>
                         </p>
-                        <input type="range" min={0} max={5} value={s.playlistSwapsAllowed ?? 2}
+                        <input type="range" min={0} max={s.maxTracks} value={Math.min(s.playlistSwapsAllowed ?? 2, s.maxTracks)}
                           onChange={(e) => setSettings({ playlistSwapsAllowed: Number(e.target.value) })}
                           className="w-full accent-green-500" />
                       </div>
@@ -283,15 +283,36 @@ export default function Lobby() {
 
         {/* ── Rôles ── */}
         <div className="order-3 flex flex-col gap-3">
-          <h2 className="text-xs font-medium text-gray-400 uppercase tracking-widest">Rôles secrets</h2>
+          <h2 className="text-xs font-medium text-gray-400 uppercase tracking-widest">Rôles</h2>
           <div className="rounded-2xl p-4 flex flex-col gap-4" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
             {ROLES.map(({ key, Icon, iconClass, label, desc }) => {
               const enabled = (s.enabledRoles ?? []).includes(key);
+              const count = (s.roleCounts ?? {})[key] ?? 1;
+              const maxCount = Math.max(1, room.players.length);
+              const setCount = (n: number) => {
+                if (!isHost) return;
+                setSettings({ roleCounts: { ...(s.roleCounts ?? {}), [key]: Math.max(1, Math.min(maxCount, n)) } });
+              };
               return (
                 <div key={key} className="flex items-start gap-3">
                   <Toggle checked={enabled} onChange={() => toggleRole(key)} disabled={!isHost} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-white flex items-center gap-1.5"><Icon size={13} className={iconClass} /> {label}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-white flex items-center gap-1.5"><Icon size={13} className={iconClass} /> {label}</p>
+                      {enabled && (
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button
+                            onClick={() => setCount(count - 1)}
+                            disabled={!isHost || count <= 1}
+                            className="w-5 h-5 rounded-full bg-gray-700 text-white text-xs flex items-center justify-center disabled:opacity-30 hover:bg-gray-600 transition-colors">−</button>
+                          <span className="text-sm text-white font-bold w-4 text-center">{count}</span>
+                          <button
+                            onClick={() => setCount(count + 1)}
+                            disabled={!isHost || count >= maxCount}
+                            className="w-5 h-5 rounded-full bg-gray-700 text-white text-xs flex items-center justify-center disabled:opacity-30 hover:bg-gray-600 transition-colors">+</button>
+                        </div>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-500 leading-snug mt-0.5">{desc}</p>
                   </div>
                 </div>

@@ -263,7 +263,14 @@ export function applyAction(
       s.policeBlocksPerGame = Math.max(1, Math.min(5, s.policeBlocksPerGame ?? 1));
       s.fouActivationsPerGame = Math.max(1, Math.min(5, s.fouActivationsPerGame ?? 1));
       s.numberOfRounds = Math.max(1, Math.min(10, s.numberOfRounds ?? 3));
-      s.playlistSwapsAllowed = Math.max(0, Math.min(5, s.playlistSwapsAllowed ?? 2));
+      s.playlistSwapsAllowed = Math.max(0, Math.min(s.maxTracks, s.playlistSwapsAllowed ?? 2));
+      if (s.roleCounts && typeof s.roleCounts === "object") {
+        const cleaned: Partial<Record<string, number>> = {};
+        for (const [k, v] of Object.entries(s.roleCounts)) {
+          cleaned[k] = Math.max(1, Math.min(10, Number(v) || 1));
+        }
+        s.roleCounts = cleaned;
+      }
       return { update: { settings: s, updated_at: now } };
     }
 
@@ -318,14 +325,20 @@ export function applyAction(
       const reset = room.players.map((p) => ({ ...p, is_ready: false, tracks: [] }));
 
       const enabledRoles = room.settings.enabledRoles ?? [];
+      const roleCounts = (room.settings as any).roleCounts ?? {};
       let roles: Record<string, string> | null = null;
       if (enabledRoles.length > 0) {
         const playerIds = shuffleArray(room.players.map((p) => p.id));
-        roles = {};
-        enabledRoles.forEach((roleName, idx) => {
-          if (idx < playerIds.length) roles![playerIds[idx]] = roleName;
+        const expandedRoles: string[] = [];
+        enabledRoles.forEach((roleName) => {
+          const count = Math.max(1, Math.min(playerIds.length, roleCounts[roleName] ?? 1));
+          for (let i = 0; i < count; i++) expandedRoles.push(roleName);
         });
-        playerIds.slice(enabledRoles.length).forEach((pid) => {
+        roles = {};
+        expandedRoles.slice(0, playerIds.length).forEach((roleName, idx) => {
+          roles![playerIds[idx]] = roleName;
+        });
+        playerIds.slice(expandedRoles.length).forEach((pid) => {
           roles![pid] = "none";
         });
       }
