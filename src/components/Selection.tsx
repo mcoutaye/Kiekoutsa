@@ -20,25 +20,27 @@ export default function Selection() {
   const [playlistError, setPlaylistError] = useState("");
   const [swapsLeft, setSwapsLeft] = useState<number | null>(null);
 
-  // Pick up OAuth token from URL after redirect
+  // Listen for token posted by OAuth popup
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const pt = params.get("pt");
-    const pp = params.get("pp") as "spotify" | "deezer" | null;
-    if (pt && pp) {
-      sessionStorage.setItem("kiekoutsa_pt", pt);
-      sessionStorage.setItem("kiekoutsa_pp", pp);
-      // Clean URL
-      const clean = window.location.pathname;
-      window.history.replaceState({}, "", clean);
-    }
+    // Restore token from sessionStorage if already connected
     const storedPt = sessionStorage.getItem("kiekoutsa_pt");
     const storedPp = sessionStorage.getItem("kiekoutsa_pp") as "spotify" | "deezer" | null;
     if (storedPt && storedPp) {
       setPlaylistToken(storedPt);
       setPlaylistProvider(storedPp);
     }
+
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === "playlist_token") {
+        const { token, provider } = event.data;
+        sessionStorage.setItem("kiekoutsa_pt", token);
+        sessionStorage.setItem("kiekoutsa_pp", provider);
+        setPlaylistToken(token);
+        setPlaylistProvider(provider);
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
   }, []);
 
   if (!room) return null;
@@ -161,14 +163,20 @@ export default function Selection() {
           {/* Connect buttons */}
           {!connected && (
             <div className="flex flex-col sm:flex-row gap-3">
-              <a
-                href={`/api/auth/spotify?roomCode=${room.code}&playerId=${playerId}`}
+              <button
+                onClick={() => {
+                  window.open(
+                    `/api/auth/spotify?roomCode=${room.code}&playerId=${playerId}`,
+                    "spotify-auth",
+                    "width=500,height=700,left=200,top=100"
+                  );
+                }}
                 className="flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
                 style={{ background: "#1DB954", color: "#000" }}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.586 14.424a.622.622 0 01-.857.207c-2.348-1.435-5.304-1.76-8.785-.964a.622.622 0 11-.277-1.215c3.809-.87 7.077-.496 9.712 1.115a.623.623 0 01.207.857zm1.224-2.723a.78.78 0 01-1.072.257c-2.687-1.652-6.785-2.131-9.965-1.166a.78.78 0 01-.973-.519.781.781 0 01.519-.972c3.632-1.102 8.147-.568 11.234 1.328a.78.78 0 01.257 1.072zm.105-2.835C14.692 9.15 9.375 8.977 6.297 9.92a.937.937 0 11-.543-1.794c3.532-1.072 9.404-.865 13.115 1.338a.937.937 0 01-.954 1.402z"/></svg>
                 Connecter Spotify
-              </a>
+              </button>
               <button
                 disabled
                 className="flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm opacity-30 cursor-not-allowed"

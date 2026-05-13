@@ -27,11 +27,11 @@ export async function GET(req: NextRequest) {
   });
 
   if (!tokenRes.ok) {
-    return NextResponse.redirect(`${appUrl}/room?playlist_error=spotify_token`);
+    const html = `<script>window.opener?.postMessage({type:'playlist_error',error:'spotify_token'},'*');window.close();</script>`;
+    return new Response(html, { headers: { "Content-Type": "text/html" } });
   }
 
   const { access_token } = await tokenRes.json();
-  return NextResponse.redirect(
-    `${appUrl}/room?pt=${access_token}&pp=spotify`
-  );
+  const html = `<script>window.opener?.postMessage({type:'playlist_token',token:${JSON.stringify(access_token)},provider:'spotify'},'*');window.close();</script>`;
+  return new Response(html, { headers: { "Content-Type": "text/html" } });
 }
