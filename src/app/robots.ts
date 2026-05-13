@@ -6,6 +6,6 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: "*",
       allow: "/",
     },
-    sitemap: "https://kiekoutsa.vercel.app/sitemap.xml",
+    sitemap: "https://www.kiekoutsa.me/sitemap.xml",
   };
 }
