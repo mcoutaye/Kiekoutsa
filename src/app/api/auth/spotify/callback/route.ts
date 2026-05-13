@@ -27,11 +27,11 @@ export async function GET(req: NextRequest) {
   });
 
   if (!tokenRes.ok) {
-    return NextResponse.redirect(`${appUrl}/room/${roomCode}?playlist_error=spotify_token`);
+    return NextResponse.redirect(`${appUrl}/room?playlist_error=spotify_token`);
   }
 
   const { access_token } = await tokenRes.json();
   return NextResponse.redirect(
-    `${appUrl}/room/${roomCode}?pt=${access_token}&pp=spotify`
+    `${appUrl}/room?pt=${access_token}&pp=spotify`
   );
 }
