@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import { Play, Eye, Check, Shield, Zap, Volume2, VolumeX, Target } from "lucide-react";
 import { useGame } from "@/contexts/GameContext";
 import ChatPanel from "@/components/ChatPanel";
@@ -125,7 +124,7 @@ export default function PlayingPhase() {
         <div className="relative">
           <div className={`w-44 h-44 rounded-full overflow-hidden border-4 border-purple-600 shadow-2xl shadow-purple-900/50 ${room.playingStartedAt && progress > 0 ? "vinyl-spin" : ""}`}>
             {track.albumCover ? (
-              <Image src={track.albumCover} alt={track.name} fill className="object-cover" />
+              <img src={track.albumCover} alt={track.name} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full bg-gray-800" />
             )}

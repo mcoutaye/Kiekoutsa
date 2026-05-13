@@ -5,7 +5,27 @@ import { GameProvider } from "@/contexts/GameContext";
 export const metadata: Metadata = {
   title: "Kiekoutsa — Qui a mis ce son ?",
   description:
-    "Le jeu multijoueur où tu dois deviner qui a choisi la musique.",
+    "Le jeu multijoueur en ligne où tu dois deviner qui a choisi la musique. Joue avec tes amis, découvre leurs goûts musicaux et marque des points !",
+  keywords: ["jeu musical", "multijoueur", "deviner musique", "quiz musical", "jeu entre amis", "kiekoutsa"],
+  authors: [{ name: "Kiekoutsa" }],
+  metadataBase: new URL("https://kiekoutsa.vercel.app"),
+  openGraph: {
+    title: "Kiekoutsa — Qui a mis ce son ?",
+    description: "Le jeu multijoueur en ligne où tu dois deviner qui a choisi la musique.",
+    url: "https://kiekoutsa.vercel.app",
+    siteName: "Kiekoutsa",
+    locale: "fr_FR",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Kiekoutsa — Qui a mis ce son ?",
+    description: "Le jeu multijoueur en ligne où tu dois deviner qui a choisi la musique.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({

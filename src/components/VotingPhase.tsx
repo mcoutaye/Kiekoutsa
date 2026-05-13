@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Image from "next/image";
 import { Eye, Check, Shield, Zap, Target } from "lucide-react";
 import { useGame } from "@/contexts/GameContext";
 import ChatPanel from "@/components/ChatPanel";
@@ -49,7 +48,7 @@ export default function VotingPhase() {
           <div className="w-full flex items-center gap-4 p-4 rounded-2xl"
             style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
             {track.albumCover ? (
-              <Image src={track.albumCover} alt={track.name} width={56} height={56} className="rounded-lg flex-shrink-0" />
+              <img src={track.albumCover} alt={track.name} width={56} height={56} className="rounded-lg flex-shrink-0" />
             ) : (
               <div className="w-14 h-14 rounded-lg bg-gray-800 flex-shrink-0" />
             )}

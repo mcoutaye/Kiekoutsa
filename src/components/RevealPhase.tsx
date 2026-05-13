@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { ArrowRight, Check, X, Search, Ghost, Zap, Shield, Target } from "lucide-react";
 import { useGame } from "@/contexts/GameContext";
 import ChatPanel from "@/components/ChatPanel";
@@ -63,7 +62,7 @@ export default function RevealPhase() {
             {track && (
               <div className="flex items-center justify-center gap-3 mt-4">
                 {track.albumCover && (
-                  <Image src={track.albumCover} alt={track.name} width={40} height={40} className="rounded-lg" />
+                  <img src={track.albumCover} alt={track.name} width={40} height={40} className="rounded-lg" />
                 )}
                 <div className="text-left">
                   <p className="font-bold text-sm">{track.name}</p>

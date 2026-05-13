@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import Image from "next/image";
 import { Search, Plus, Check, X, ArrowRight, Target } from "lucide-react";
 import { useGame } from "@/contexts/GameContext";
 import type { SpotifyTrack } from "@/types/game";
@@ -107,7 +106,7 @@ export default function Selection() {
                 style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
                 onClick={() => !added && !full && addTrack({ id: track.id, name: track.name, artists: track.artists, albumCover: track.albumCover, previewUrl: track.previewUrl })}>
                 {track.albumCover ? (
-                  <Image src={track.albumCover} alt={track.name} width={48} height={48} className="rounded-lg flex-shrink-0" />
+                  <img src={track.albumCover} alt={track.name} width={48} height={48} className="rounded-lg flex-shrink-0" />
                 ) : (
                   <div className="w-12 h-12 rounded-lg bg-gray-800 flex-shrink-0" />
                 )}
@@ -138,7 +137,7 @@ export default function Selection() {
           <div className="space-y-2">
             {myTracks.map((t) => (
               <div key={t.id} className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: "var(--bg)" }}>
-                {t.albumCover && <Image src={t.albumCover} alt={t.name} width={32} height={32} className="rounded flex-shrink-0" />}
+                {t.albumCover && <img src={t.albumCover} alt={t.name} width={32} height={32} className="rounded flex-shrink-0" />}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{t.name}</p>
                   <p className="text-xs text-gray-500 truncate">{t.artists}</p>

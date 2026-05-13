@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { Trophy, Medal, RotateCcw, Zap, Shield, Search, type LucideIcon } from "lucide-react";
 import { useGame } from "@/contexts/GameContext";
 import ChatPanel from "@/components/ChatPanel";
@@ -80,7 +79,7 @@ export default function EndScreen() {
                 {room.roundResults.map((r, i) => (
                   <div key={i} className="flex items-center gap-3">
                     {r.track.albumCover ? (
-                      <Image src={r.track.albumCover} alt={r.track.name} width={36} height={36} className="rounded flex-shrink-0" />
+                      <img src={r.track.albumCover} alt={r.track.name} width={36} height={36} className="rounded flex-shrink-0" />
                     ) : (
                       <div className="w-9 h-9 rounded bg-gray-800 flex-shrink-0" />
                     )}
