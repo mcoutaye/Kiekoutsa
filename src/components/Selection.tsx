@@ -59,13 +59,14 @@ export default function Selection() {
 
   const swapsAllowed = room.settings.playlistSwapsAllowed ?? 2;
   const showPlaylistTracks = room.settings.showPlaylistTracks ?? true;
+  const trackCount = minTracks === maxTracks ? minTracks : minTracks + Math.floor(Math.random() * (maxTracks - minTracks + 1));
 
   // Fetch liked tracks and auto-add them to the room
   const fetchAndAddLikedTracks = useCallback(async (token: string, provider: "spotify" | "deezer") => {
     setPlaylistLoading(true);
     setPlaylistError("");
     try {
-      const res = await fetch(`/api/playlist/liked?provider=${provider}&token=${encodeURIComponent(token)}&count=${maxTracks}`);
+      const res = await fetch(`/api/playlist/liked?provider=${provider}&token=${encodeURIComponent(token)}&count=${trackCount}`);
       const data = await res.json();
       if (data.error === "no_liked_tracks") {
         setPlaylistError("Aucune musique likée trouvée sur ton compte.");
@@ -78,7 +79,7 @@ export default function Selection() {
       // Remove any previously added tracks first
       for (const t of myTracks) await removeTrack(t.id);
       // Add fetched tracks
-      for (const t of data.tracks.slice(0, maxTracks)) {
+      for (const t of data.tracks.slice(0, trackCount)) {
         await addTrack({ id: t.id, name: t.name, artists: t.artists, albumCover: t.albumCover, previewUrl: t.previewUrl });
       }
       setSwapsLeft(swapsAllowed);

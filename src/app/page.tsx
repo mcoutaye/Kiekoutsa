@@ -114,6 +114,10 @@ export default function HomePage() {
           <p className="text-center text-xs text-gray-500 mt-3">Choisis un avatar pour continuer</p>
         )}
       </div>
+
+      <p className="fixed bottom-3 right-4 text-xs text-gray-700 font-mono select-none">
+        v{process.env.NEXT_PUBLIC_VERSION ?? "1.000"}
+      </p>
     </div>
   );
 }
