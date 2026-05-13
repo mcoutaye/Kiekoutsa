@@ -19,6 +19,7 @@ export default function Selection() {
   const [playlistLoading, setPlaylistLoading] = useState(false);
   const [playlistError, setPlaylistError] = useState("");
   const [swapsLeft, setSwapsLeft] = useState<number | null>(null);
+  const [chosenCount, setChosenCount] = useState<number | "random" | null>(null);
 
   // Listen for token posted by OAuth popup
   useEffect(() => {
@@ -59,7 +60,9 @@ export default function Selection() {
 
   const swapsAllowed = room.settings.playlistSwapsAllowed ?? 2;
   const showPlaylistTracks = room.settings.showPlaylistTracks ?? true;
-  const trackCount = minTracks === maxTracks ? minTracks : minTracks + Math.floor(Math.random() * (maxTracks - minTracks + 1));
+  const trackCount = chosenCount === "random" || chosenCount === null
+    ? (minTracks === maxTracks ? minTracks : minTracks + Math.floor(Math.random() * (maxTracks - minTracks + 1)))
+    : chosenCount;
 
   // Fetch liked tracks and auto-add them to the room
   const fetchAndAddLikedTracks = useCallback(async (token: string, provider: "spotify" | "deezer") => {
@@ -161,8 +164,37 @@ export default function Selection() {
             </p>
           </div>
 
+          {/* Step 1 : choose track count */}
+          {!connected && chosenCount === null && (
+            <div className="flex flex-col gap-3">
+              <p className="text-sm font-semibold text-gray-300">Combien de musiques veux-tu ?</p>
+              <div className="flex flex-wrap gap-2">
+                {Array.from({ length: maxTracks - minTracks + 1 }, (_, i) => minTracks + i).map((n) => (
+                  <button key={n} onClick={() => setChosenCount(n)}
+                    className="px-5 py-2.5 rounded-xl font-bold text-sm border-2 border-transparent hover:border-green-500 transition-all active:scale-95"
+                    style={{ background: "var(--surface)" }}>
+                    {n}
+                  </button>
+                ))}
+                <button onClick={() => setChosenCount("random")}
+                  className="px-5 py-2.5 rounded-xl font-bold text-sm border-2 border-transparent hover:border-green-500 transition-all active:scale-95 text-gray-400"
+                  style={{ background: "var(--surface)" }}>
+                  🎲 Aléatoire
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Recap + change */}
+          {!connected && chosenCount !== null && (
+            <div className="flex items-center gap-2 text-sm text-gray-400">
+              <span>{chosenCount === "random" ? "🎲 Nombre aléatoire" : `${chosenCount} musique${chosenCount > 1 ? "s" : ""}`}</span>
+              <button onClick={() => setChosenCount(null)} className="text-xs text-gray-600 hover:text-gray-300 underline">changer</button>
+            </div>
+          )}
+
           {/* Connect buttons */}
-          {!connected && (
+          {!connected && chosenCount !== null && (
             <div className="flex flex-col sm:flex-row gap-3">
               <button
                 onClick={() => {

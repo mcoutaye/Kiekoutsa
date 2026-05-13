@@ -58,14 +58,38 @@ async function fetchDeezerLiked(token: string, count: number): Promise<{ name: s
   return tracks;
 }
 
+function normalize(s: string) {
+  return s.toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9 ]/g, "")
+    .trim();
+}
+
+function looseMatch(a: string, b: string) {
+  const na = normalize(a);
+  const nb = normalize(b);
+  return na === nb || na.includes(nb) || nb.includes(na);
+}
+
 async function matchOnDeezer(name: string, artist: string): Promise<SpotifyTrack | null> {
-  const q = encodeURIComponent(`${name} ${artist}`);
-  const res = await fetch(`https://api.deezer.com/search?q=${q}&limit=5`, { cache: "no-store" });
+  // Use Deezer's track/artist operators for precise search
+  const q = encodeURIComponent(`track:"${name}" artist:"${artist}"`);
+  const res = await fetch(`https://api.deezer.com/search?q=${q}&limit=10`, { cache: "no-store" });
   if (!res.ok) return null;
   const data = await res.json();
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const item = (data.data ?? []).find((r: any) => r.preview);
+  const items: any[] = data.data ?? [];
+
+  // Find first result where title AND artist loosely match AND has a preview
+  const item = items.find((r) =>
+    r.preview &&
+    looseMatch(r.title, name) &&
+    looseMatch(r.artist?.name ?? "", artist)
+  );
+
   if (!item) return null;
+
   return {
     id: String(item.id),
     name: item.title,
