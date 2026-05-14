@@ -288,7 +288,10 @@ export default function Lobby() {
             {ROLES.map(({ key, Icon, iconClass, label, desc }) => {
               const enabled = (s.enabledRoles ?? []).includes(key);
               const count = (s.roleCounts ?? {})[key] ?? 1;
-              const maxCount = Math.max(1, room.players.length);
+              const otherCounts = (s.enabledRoles ?? [])
+                .filter((r) => r !== key)
+                .reduce((sum, r) => sum + ((s.roleCounts ?? {})[r] ?? 1), 0);
+              const maxCount = Math.max(1, room.players.length - otherCounts);
               const setCount = (n: number) => {
                 if (!isHost) return;
                 setSettings({ roleCounts: { ...(s.roleCounts ?? {}), [key]: Math.max(1, Math.min(maxCount, n)) } });
