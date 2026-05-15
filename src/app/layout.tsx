@@ -40,6 +40,7 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <body>
+        <Script id="monetag" strategy="afterInteractive">{`(function(s){s.dataset.zone='11008337',s.src='https://n6wxm.com/vignette.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))`}</Script>
         <Script src="https://www.googletagmanager.com/gtag/js?id=G-BY75TJ0J02" strategy="afterInteractive" />
         <Script id="ga" strategy="afterInteractive">{`
           window.dataLayer = window.dataLayer || [];
