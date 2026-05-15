@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import "./globals.css";
 import { GameProvider } from "@/contexts/GameContext";
 
@@ -39,6 +40,13 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <body>
+        <Script src="https://www.googletagmanager.com/gtag/js?id=G-BY75TJ0J02" strategy="afterInteractive" />
+        <Script id="ga" strategy="afterInteractive">{`
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-BY75TJ0J02');
+        `}</Script>
         <GameProvider>{children}</GameProvider>
       </body>
     </html>
