@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useGame } from "@/contexts/GameContext";
 import AvatarPicker from "@/components/AvatarPicker";
+import FeedbackBox from "@/components/FeedbackBox";
 import { Disc3, Clock } from "lucide-react";
 
 export default function HomePage() {
@@ -37,6 +38,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8">
+      <FeedbackBox />
       <a
         href="https://ko-fi.com/mathcou"
         target="_blank"
