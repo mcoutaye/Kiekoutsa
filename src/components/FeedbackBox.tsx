@@ -106,7 +106,7 @@ export default function FeedbackBox() {
                     <input
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      placeholder="Ton prénom (optionnel)"
+                      placeholder="Ton pseudo (optionnel)"
                       className="w-full px-3 py-2.5 rounded-xl text-sm text-white placeholder-gray-600 outline-none"
                       style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
                     />
