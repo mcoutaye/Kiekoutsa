@@ -40,7 +40,6 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <body>
-        <Script id="monetag-inpage" strategy="afterInteractive">{`(function(s){s.dataset.zone='11008387',s.src='https://nap5k.com/tag.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))`}</Script>
         <Script src="https://www.googletagmanager.com/gtag/js?id=G-BY75TJ0J02" strategy="afterInteractive" />
         <Script id="ga" strategy="afterInteractive">{`
           window.dataLayer = window.dataLayer || [];
