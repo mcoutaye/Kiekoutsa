@@ -71,6 +71,13 @@ export async function POST(req: NextRequest) {
     target_assignments: null,
     target_votes: {},
     current_round: 1,
+    prompts: {},
+    prompt_order: [],
+    prompt_submissions: {},
+    prompt_votes: {},
+    player_prompt_progress: {},
+    current_prompt_index: 0,
+    prompt_results: [],
   };
 
   const { error } = await sb.from("rooms").insert(roomData);

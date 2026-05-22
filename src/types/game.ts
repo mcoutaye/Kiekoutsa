@@ -8,6 +8,9 @@ export type GamePhase =
   | "playing"
   | "voting"
   | "reveal"
+  | "prompt-writing"
+  | "prompt-submission"
+  | "prompt-reveal"
   | "end";
 
 export type PlaybackMode = "master" | "sync";
@@ -23,7 +26,7 @@ export interface RoomSettings {
   anonymousVotes: boolean;
   showVoteCounts: boolean;
   showAllTracksEnd: boolean;
-  gameMode: "basique" | "taupe" | "cible" | "playlist";
+  gameMode: "basique" | "taupe" | "cible" | "playlist" | "prompt";
   enabledRoles: RoleName[];
   policeBlocksPerGame: number;
   fouActivationsPerGame: number;
@@ -134,6 +137,43 @@ export interface ClientRoom {
   myTargetVote: string | null;
   targetVotedPlayerIds: string[];
   currentRound: number;
+  // Prompt mode
+  myPrompt: string | null;
+  promptWritingDoneIds: string[];
+  currentPromptOwnerId: string | null;
+  currentPromptOwnerName: string | null;
+  currentPromptText: string | null;
+  myPromptProgress: number;
+  totalPromptAssignments: number;
+  promptRevealSubmissions: PromptSubmissionEntry[];
+  promptVotes: Record<string, string>;
+  myPromptVote: string | null;
+  promptResults: PromptResult[];
+  currentPromptIndex: number;
+  totalPrompts: number;
+  isCurrentPromptRevealed: boolean;
+}
+
+export interface PromptTrack {
+  id: string;
+  name: string;
+  artists: string;
+  albumCover: string;
+  previewUrl: string | null;
+}
+
+export interface PromptSubmissionEntry {
+  submitterId: string;
+  track: PromptTrack;
+}
+
+export interface PromptResult {
+  promptOwnerId: string;
+  promptOwnerName: string;
+  promptText: string;
+  submissions: (PromptSubmissionEntry & { submitterName: string })[];
+  votesBySubmitter: Record<string, number>;
+  pointsEarned: Record<string, number>;
 }
 
 export interface SpotifyTrack {

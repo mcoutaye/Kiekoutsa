@@ -13,6 +13,9 @@ import PlayingPhase from "@/components/PlayingPhase";
 import VotingPhase from "@/components/VotingPhase";
 import RevealPhase from "@/components/RevealPhase";
 import EndScreen from "@/components/EndScreen";
+import PromptWriting from "@/components/PromptWriting";
+import PromptSubmission from "@/components/PromptSubmission";
+import PromptReveal from "@/components/PromptReveal";
 
 export default function RoomPage() {
   const router = useRouter();
@@ -150,6 +153,9 @@ export default function RoomPage() {
         {room.phase === "playing" && <PlayingPhase />}
         {room.phase === "voting" && <VotingPhase />}
         {room.phase === "reveal" && <RevealPhase />}
+        {room.phase === "prompt-writing" && <PromptWriting />}
+        {room.phase === "prompt-submission" && <PromptSubmission />}
+        {room.phase === "prompt-reveal" && <PromptReveal />}
         {room.phase === "end" && <EndScreen />}
       </div>
     </div>

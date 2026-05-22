@@ -1,6 +1,6 @@
 import type {
   GamePhase, PlaybackMode, RoomSettings, Track, RoleName,
-  ClientRoom, ClientTrack, VoteResult, RoundResult,
+  ClientRoom, ClientTrack, VoteResult, RoundResult, PromptResult, PromptSubmissionEntry,
 } from "@/types/game";
 import type { ChatMessage } from "@/types/chat";
 import { DEFAULT_SETTINGS } from "@/types/game";
@@ -40,6 +40,14 @@ export interface RoomDB {
   target_assignments: Record<string, string> | null;
   target_votes: Record<string, string>;
   current_round: number;
+  // Prompt mode
+  prompts: Record<string, string>;
+  prompt_order: string[];
+  prompt_submissions: Record<string, Record<string, { id: string; name: string; artists: string; albumCover: string; previewUrl: string | null }>>;
+  prompt_votes: Record<string, Record<string, string>>;
+  player_prompt_progress: Record<string, number>;
+  current_prompt_index: number;
+  prompt_results: PromptResult[];
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -138,6 +146,49 @@ export function sanitizeRoom(room: RoomDB, myPlayerId: string): ClientRoom {
     ? (roles as Record<string, RoleName>)
     : null;
 
+  // ── Prompt mode fields ──────────────────────────────────────────────────
+  const prompts = (room as any).prompts as Record<string, string> ?? {};
+  const promptOrder = Array.isArray((room as any).prompt_order) ? (room as any).prompt_order as string[] : [];
+  const playerPromptProgress = (room as any).player_prompt_progress as Record<string, number> ?? {};
+  const promptSubmissions = (room as any).prompt_submissions as Record<string, Record<string, any>> ?? {};
+  const promptVotesAll = (room as any).prompt_votes as Record<string, Record<string, string>> ?? {};
+  const promptResults = Array.isArray((room as any).prompt_results) ? (room as any).prompt_results as PromptResult[] : [];
+  const currentPromptIndex = (room as any).current_prompt_index as number ?? 0;
+
+  const myPrompt = prompts[myPlayerId] ?? null;
+  const promptWritingDoneIds = Object.keys(prompts);
+
+  const N = promptOrder.length;
+  const myIndexInOrder = promptOrder.indexOf(myPlayerId);
+  const myProgress = playerPromptProgress[myPlayerId] ?? 0;
+  const totalPromptAssignments = N > 1 ? N - 1 : 0;
+  const isSubmissionDone = myIndexInOrder < 0 || myProgress >= totalPromptAssignments;
+
+  // Current prompt owner: submission phase (per-player) or reveal phase (shared)
+  let currentPromptOwnerId: string | null = null;
+  if (room.phase === "prompt-submission" && !isSubmissionDone && N > 0) {
+    currentPromptOwnerId = promptOrder[(myIndexInOrder + 1 + myProgress) % N];
+  } else if (room.phase === "prompt-reveal") {
+    currentPromptOwnerId = promptOrder[currentPromptIndex] ?? null;
+  }
+  const currentPromptText = currentPromptOwnerId ? (prompts[currentPromptOwnerId] ?? null) : null;
+  const currentPromptOwnerName = currentPromptOwnerId
+    ? (players.find((p: any) => p.id === currentPromptOwnerId)?.name ?? null)
+    : null;
+
+  // Reveal phase: submissions (anonymous) + votes
+  const promptRevealSubmissions: PromptSubmissionEntry[] = room.phase === "prompt-reveal" && currentPromptOwnerId
+    ? Object.entries(promptSubmissions[currentPromptOwnerId] ?? {}).map(([sid, track]) => ({
+        submitterId: sid,
+        track: { id: track.id, name: track.name, artists: track.artists, albumCover: track.albumCover, previewUrl: track.previewUrl ?? null },
+      }))
+    : [];
+  const currentPromptVotes: Record<string, string> = room.phase === "prompt-reveal" && currentPromptOwnerId
+    ? (promptVotesAll[currentPromptOwnerId] ?? {})
+    : {};
+  const myPromptVote = currentPromptVotes[myPlayerId] ?? null;
+  const isCurrentPromptRevealed = promptResults.length > currentPromptIndex;
+
   return {
     code: room.code,
     phase: room.phase,
@@ -177,6 +228,20 @@ export function sanitizeRoom(room: RoomDB, myPlayerId: string): ClientRoom {
     myTargetVote,
     targetVotedPlayerIds,
     currentRound: (room as any).current_round ?? 1,
+    myPrompt,
+    promptWritingDoneIds,
+    currentPromptOwnerId,
+    currentPromptOwnerName,
+    currentPromptText,
+    myPromptProgress: myProgress,
+    totalPromptAssignments,
+    promptRevealSubmissions,
+    promptVotes: currentPromptVotes,
+    myPromptVote,
+    promptResults,
+    currentPromptIndex,
+    totalPrompts: N,
+    isCurrentPromptRevealed,
   };
 }
 
@@ -322,6 +387,26 @@ export function applyAction(
     case "start-selection": {
       if (!isHost) return { error: "Non autorisé" };
       if (room.players.length < 3) return { error: "Il faut au moins 3 joueurs" };
+
+      if (room.settings.gameMode === "prompt") {
+        const reset = room.players.map((p) => ({ ...p, is_ready: false, tracks: [], score: p.score }));
+        return {
+          update: {
+            phase: "prompt-writing" as GamePhase,
+            players: reset,
+            prompts: {},
+            prompt_order: [],
+            prompt_submissions: {},
+            prompt_votes: {},
+            player_prompt_progress: {},
+            current_prompt_index: 0,
+            prompt_results: [],
+            round_results: [],
+            updated_at: now,
+          },
+        };
+      }
+
       const reset = room.players.map((p) => ({ ...p, is_ready: false, tracks: [] }));
 
       const enabledRoles = room.settings.enabledRoles ?? [];
@@ -605,6 +690,8 @@ export function applyAction(
           police_blocked_id: null, police_blocks_used: 0, fou_activated: false, fou_activations_used: 0,
           target_assignments: null, target_votes: {},
           current_round: 1,
+          prompts: {}, prompt_order: [], prompt_submissions: {}, prompt_votes: {},
+          player_prompt_progress: {}, current_prompt_index: 0, prompt_results: [],
           updated_at: now,
         },
       };
@@ -648,9 +735,188 @@ export function applyAction(
       return { update: { fou_activated: true, fou_activations_used: fouUsed + 1, updated_at: now } };
     }
 
+    case "submit-prompt": {
+      if (room.phase !== "prompt-writing" || !player) return { error: "Non autorisé" };
+      const text = String(payload?.text ?? "").trim().slice(0, 100);
+      if (!text) return { error: "Prompt vide" };
+      const currentPrompts = (room as any).prompts as Record<string, string> ?? {};
+      if (currentPrompts[playerId]) return { error: "Tu as déjà soumis un prompt" };
+      const newPrompts = { ...currentPrompts, [playerId]: text };
+      // Auto-start submission if all players submitted
+      if (Object.keys(newPrompts).length >= room.players.length) {
+        const order = shuffleArray(room.players.map((p) => p.id));
+        const progress: Record<string, number> = {};
+        order.forEach((id) => { progress[id] = 0; });
+        return {
+          update: {
+            prompts: newPrompts,
+            phase: "prompt-submission" as GamePhase,
+            prompt_order: order,
+            player_prompt_progress: progress,
+            updated_at: now,
+          },
+        };
+      }
+      return { update: { prompts: newPrompts, updated_at: now } };
+    }
+
+    case "force-start-prompt-submission": {
+      if (!isHost || room.phase !== "prompt-writing") return { error: "Non autorisé" };
+      const currentPrompts = (room as any).prompts as Record<string, string> ?? {};
+      // Fill missing prompts with a placeholder
+      const filledPrompts = { ...currentPrompts };
+      room.players.forEach((p) => {
+        if (!filledPrompts[p.id]) filledPrompts[p.id] = "???";
+      });
+      const order = shuffleArray(room.players.map((p) => p.id));
+      const progress: Record<string, number> = {};
+      order.forEach((id) => { progress[id] = 0; });
+      return {
+        update: {
+          prompts: filledPrompts,
+          phase: "prompt-submission" as GamePhase,
+          prompt_order: order,
+          player_prompt_progress: progress,
+          updated_at: now,
+        },
+      };
+    }
+
+    case "submit-prompt-song": {
+      if (room.phase !== "prompt-submission" || !player) return { error: "Non autorisé" };
+      const { promptOwnerId, track } = payload as { promptOwnerId: string; track: { id: string; name: string; artists: string; albumCover: string; previewUrl: string | null } };
+      if (!promptOwnerId || !track) return { error: "Payload invalide" };
+      if (promptOwnerId === playerId) return { error: "Tu ne peux pas soumettre pour ton propre prompt" };
+      const promptOrder = (room as any).prompt_order as string[] ?? [];
+      const playerProgress = (room as any).player_prompt_progress as Record<string, number> ?? {};
+      const myIdx = promptOrder.indexOf(playerId);
+      const myProg = playerProgress[playerId] ?? 0;
+      const N = promptOrder.length;
+      const expectedOwnerId = N > 0 && myIdx >= 0 ? promptOrder[(myIdx + 1 + myProg) % N] : null;
+      if (expectedOwnerId !== promptOwnerId) return { error: "Ce n'est pas le prompt actuel" };
+      const currentSubs = (room as any).prompt_submissions as Record<string, Record<string, any>> ?? {};
+      const newSubs = {
+        ...currentSubs,
+        [promptOwnerId]: { ...(currentSubs[promptOwnerId] ?? {}), [playerId]: track },
+      };
+      const newProgress = { ...playerProgress, [playerId]: myProg + 1 };
+      // Check if all players finished all assignments
+      const totalAssignments = N - 1;
+      const allDone = promptOrder.every((pid) => (newProgress[pid] ?? 0) >= totalAssignments);
+      if (allDone) {
+        return {
+          update: {
+            prompt_submissions: newSubs,
+            player_prompt_progress: newProgress,
+            phase: "prompt-reveal" as GamePhase,
+            current_prompt_index: 0,
+            updated_at: now,
+          },
+        };
+      }
+      return { update: { prompt_submissions: newSubs, player_prompt_progress: newProgress, updated_at: now } };
+    }
+
+    case "cast-prompt-vote": {
+      if (room.phase !== "prompt-reveal" || !player) return { error: "Non autorisé" };
+      const promptOrder = (room as any).prompt_order as string[] ?? [];
+      const currentPIdx = (room as any).current_prompt_index as number ?? 0;
+      const currentOwner = promptOrder[currentPIdx] ?? null;
+      if (!currentOwner) return { error: "Prompt introuvable" };
+      const promptResults = Array.isArray((room as any).prompt_results) ? (room as any).prompt_results as PromptResult[] : [];
+      if (promptResults.length > currentPIdx) return { error: "Les votes sont déjà révélés" };
+      const { submitterId } = payload as { submitterId: string };
+      if (!submitterId) return { error: "Payload invalide" };
+      if (submitterId === playerId) return { error: "Tu ne peux pas voter pour toi-même" };
+      const currentVotesAll = (room as any).prompt_votes as Record<string, Record<string, string>> ?? {};
+      const currentVotes = currentVotesAll[currentOwner] ?? {};
+      if (currentVotes[playerId]) return { error: "Tu as déjà voté" };
+      const newVotes = { ...currentVotesAll, [currentOwner]: { ...currentVotes, [playerId]: submitterId } };
+      // Auto-reveal if all eligible players voted
+      const eligibleVoters = room.players;
+      const newCurrentVotes = newVotes[currentOwner];
+      const allVoted = eligibleVoters.every((p) => newCurrentVotes[p.id] !== undefined);
+      if (allVoted && room.settings.autoReveal) {
+        return { update: { prompt_votes: newVotes, ...computePromptReveal(room, currentOwner, newVotes), updated_at: now } };
+      }
+      return { update: { prompt_votes: newVotes, updated_at: now } };
+    }
+
+    case "force-reveal-prompt": {
+      if (!isHost || room.phase !== "prompt-reveal") return { error: "Non autorisé" };
+      const promptOrder = (room as any).prompt_order as string[] ?? [];
+      const currentPIdx = (room as any).current_prompt_index as number ?? 0;
+      const currentOwner = promptOrder[currentPIdx] ?? null;
+      if (!currentOwner) return { error: "Prompt introuvable" };
+      const promptResults = Array.isArray((room as any).prompt_results) ? (room as any).prompt_results as PromptResult[] : [];
+      if (promptResults.length > currentPIdx) return { error: "Déjà révélé" };
+      const promptVotesAll = (room as any).prompt_votes as Record<string, Record<string, string>> ?? {};
+      return { update: { ...computePromptReveal(room, currentOwner, promptVotesAll), updated_at: now } };
+    }
+
+    case "next-prompt": {
+      if (!isHost || room.phase !== "prompt-reveal") return { error: "Non autorisé" };
+      const promptOrder = (room as any).prompt_order as string[] ?? [];
+      const currentPIdx = (room as any).current_prompt_index as number ?? 0;
+      const promptResults = Array.isArray((room as any).prompt_results) ? (room as any).prompt_results as PromptResult[] : [];
+      if (promptResults.length <= currentPIdx) return { error: "Révèle d'abord les votes" };
+      const nextIdx = currentPIdx + 1;
+      if (nextIdx >= promptOrder.length) {
+        return { update: { phase: "end" as GamePhase, updated_at: now } };
+      }
+      return { update: { current_prompt_index: nextIdx, updated_at: now } };
+    }
+
     default:
       return { error: `Action inconnue: ${action}` };
   }
+}
+
+function computePromptReveal(
+  room: RoomDB,
+  promptOwnerId: string,
+  promptVotesAll: Record<string, Record<string, string>>
+): Partial<RoomDB> {
+  const prompts = (room as any).prompts as Record<string, string> ?? {};
+  const promptSubmissions = (room as any).prompt_submissions as Record<string, Record<string, any>> ?? {};
+  const promptResults = Array.isArray((room as any).prompt_results) ? (room as any).prompt_results as PromptResult[] : [];
+  const promptOwner = room.players.find((p) => p.id === promptOwnerId);
+  const votes = promptVotesAll[promptOwnerId] ?? {};
+
+  const votesBySubmitter: Record<string, number> = {};
+  Object.values(votes).forEach((sid) => {
+    votesBySubmitter[sid] = (votesBySubmitter[sid] ?? 0) + 1;
+  });
+
+  const submissions = Object.entries(promptSubmissions[promptOwnerId] ?? {}).map(([sid, track]) => ({
+    submitterId: sid,
+    submitterName: room.players.find((p) => p.id === sid)?.name ?? "Inconnu",
+    track: { id: track.id, name: track.name, artists: track.artists, albumCover: track.albumCover, previewUrl: track.previewUrl ?? null },
+  }));
+
+  const pointsEarned: Record<string, number> = {};
+  Object.values(votes).forEach((sid) => {
+    pointsEarned[sid] = (pointsEarned[sid] ?? 0) + 1;
+  });
+
+  const updatedPlayers = room.players.map((p) => ({
+    ...p,
+    score: p.score + (pointsEarned[p.id] ?? 0),
+  }));
+
+  const result: PromptResult = {
+    promptOwnerId,
+    promptOwnerName: promptOwner?.name ?? "Inconnu",
+    promptText: prompts[promptOwnerId] ?? "",
+    submissions,
+    votesBySubmitter,
+    pointsEarned,
+  };
+
+  return {
+    players: updatedPlayers,
+    prompt_results: [...promptResults, result],
+  };
 }
 
 function isGuesserTrack(room: RoomDB): boolean {

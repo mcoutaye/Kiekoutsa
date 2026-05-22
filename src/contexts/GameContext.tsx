@@ -7,7 +7,7 @@ import React, {
 import { supabase } from "@/lib/supabase";
 import { sanitizeRoom } from "@/lib/room-utils";
 import type { RoomDB } from "@/lib/room-utils";
-import type { ClientRoom, PlaybackMode, Track, RoomSettings } from "@/types/game";
+import type { ClientRoom, PlaybackMode, Track, RoomSettings, SpotifyTrack } from "@/types/game";
 
 // ─── Client ID (persists for session) ──────────────────────────────────────
 function getClientId(): string {
@@ -54,6 +54,12 @@ interface GameContextType {
   guesserPickTrack: (track: Track) => void;
   policeBlock: (targetId: string) => void;
   fouActivate: () => void;
+  submitPrompt: (text: string) => void;
+  forceStartPromptSubmission: () => void;
+  submitPromptSong: (promptOwnerId: string, track: SpotifyTrack) => void;
+  castPromptVote: (submitterId: string) => void;
+  forceRevealPrompt: () => void;
+  nextPrompt: () => void;
 }
 
 const GameContext = createContext<GameContextType | null>(null);
@@ -165,8 +171,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // For reveal/end phase transitions, always fetch complete state (track_queue absent from partial payload)
-      if (newRoom.phase === "reveal" || newRoom.phase === "end") {
+      // For reveal/end/prompt-reveal phase transitions, always fetch complete state
+      if (newRoom.phase === "reveal" || newRoom.phase === "end" || newRoom.phase === "prompt-reveal" || newRoom.phase === "prompt-submission" || newRoom.phase === "prompt-writing") {
         fetchRoom();
         return;
       }
@@ -297,6 +303,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const guesserPickTrack = useCallback((track: Track) => action("guesser-pick-track", track), [action]);
   const policeBlock = useCallback((targetId: string) => action("police-block", { targetId }), [action]);
   const fouActivate = useCallback(() => action("fou-activate"), [action]);
+  const submitPrompt = useCallback((text: string) => action("submit-prompt", { text }), [action]);
+  const forceStartPromptSubmission = useCallback(() => action("force-start-prompt-submission"), [action]);
+  const submitPromptSong = useCallback((promptOwnerId: string, track: SpotifyTrack) => action("submit-prompt-song", { promptOwnerId, track }), [action]);
+  const castPromptVote = useCallback((submitterId: string) => action("cast-prompt-vote", { submitterId }), [action]);
+  const forceRevealPrompt = useCallback(() => action("force-reveal-prompt"), [action]);
+  const nextPrompt = useCallback(() => action("next-prompt"), [action]);
   const clearError = useCallback(() => setError(null), []);
 
   const sendChat = useCallback(
@@ -331,6 +343,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       startGame, hostStartMusic, transitionToVoting,
       castVote, castCibleVote, forceReveal, nextRound, playAgain, kickPlayer,
       guesserPickTrack, policeBlock, fouActivate,
+      submitPrompt, forceStartPromptSubmission, submitPromptSong, castPromptVote, forceRevealPrompt, nextPrompt,
     }}>
       {children}
     </GameContext.Provider>

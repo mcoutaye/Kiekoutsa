@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useGame } from "@/contexts/GameContext";
-import { Crown, Settings, ChevronDown, ChevronUp, Users, Eye, EyeOff, Copy, Check, UserX, Zap, Shield, Search, Target, Music, type LucideIcon } from "lucide-react";
+import { Crown, Settings, ChevronDown, ChevronUp, Users, Eye, EyeOff, Copy, Check, UserX, Zap, Shield, Search, Target, Music, Mic2, type LucideIcon } from "lucide-react";
 import ChatPanel from "@/components/ChatPanel";
 import type { RoleName } from "@/types/game";
 
@@ -63,7 +63,7 @@ export default function Lobby() {
         <div className="order-1 flex flex-col gap-3">
           <h2 className="text-xs font-medium text-gray-400 uppercase tracking-widest">Mode de jeu</h2>
           <div className="rounded-2xl p-4 flex flex-col gap-3" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
-            {(["basique", "taupe", "cible", "playlist"] as const).map((mode) => {
+            {(["basique", "taupe", "cible", "playlist", "prompt"] as const).map((mode) => {
               const active = s.gameMode === mode;
               return (
                 <button key={mode}
@@ -78,12 +78,14 @@ export default function Lobby() {
                     {mode === "taupe" && <span className="flex items-center gap-1.5"><Search size={13} className="text-purple-400" /> Taupe</span>}
                     {mode === "cible" && <span className="flex items-center gap-1.5"><Target size={13} className="text-pink-400" /> Cible</span>}
                     {mode === "playlist" && <span className="flex items-center gap-1.5"><Music size={13} className="text-green-400" /> Likés</span>}
+                    {mode === "prompt" && <span className="flex items-center gap-1.5"><Mic2 size={13} className="text-blue-400" /> Soit drôle</span>}
                   </span>
                   <span className="text-xs text-gray-500 mt-0.5">
                     {mode === "basique" && "Partie classique, devinez qui a mis chaque son."}
                     {mode === "taupe" && "Un joueur IA s'infiltre. Trouvez la Taupe !"}
                     {mode === "cible" && "Chaque joueur reçoit une cible secrète. Trouvez qui a mis chaque son ET à qui il était destiné !"}
                     {mode === "playlist" && "Les musiques sont piochées depuis vos playlist titres likés Spotify."}
+                    {mode === "prompt" && "Écris une situation, les autres trouvent la musique parfaite. Vote pour la meilleure !"}
                   </span>
                 </button>
               );
@@ -172,7 +174,7 @@ export default function Lobby() {
 
               {settingsOpen && (
                 <div className="px-4 pb-4 pt-2 space-y-4" style={{ background: "var(--surface)" }}>
-                  {s.gameMode === "cible" ? (
+                  {s.gameMode === "prompt" ? null : s.gameMode === "cible" ? (
                     <div>
                       <p className="text-xs font-medium text-gray-400 mb-2">
                         Nombre de rounds : <span className="text-white font-bold">{s.numberOfRounds ?? 3}</span>
@@ -241,14 +243,20 @@ export default function Lobby() {
                       </div>
                     </div>
                   )}
-                  {[
-                    { key: "autoReveal", label: "Révéler auto quand tout le monde a voté" },
-                    { key: "autoPlay", label: "Lancer la musique automatiquement" },
-                    { key: "allowSelfVote", label: "Voter pour soi-même" },
-                    { key: "anonymousVotes", label: "Votes anonymes (cache qui a voté pour qui)" },
-                    { key: "showVoteCounts", label: "Montrer les compteurs de votes pendant le vote" },
-                    { key: "showAllTracksEnd", label: "Montrer toutes les musiques à la fin" },
-                  ].map(({ key, label }) => (
+                  {(s.gameMode === "prompt"
+                    ? [
+                        { key: "autoReveal", label: "Révéler auto quand tout le monde a voté" },
+                        { key: "showVoteCounts", label: "Montrer les compteurs de votes pendant le vote" },
+                      ]
+                    : [
+                        { key: "autoReveal", label: "Révéler auto quand tout le monde a voté" },
+                        { key: "autoPlay", label: "Lancer la musique automatiquement" },
+                        { key: "allowSelfVote", label: "Voter pour soi-même" },
+                        { key: "anonymousVotes", label: "Votes anonymes (cache qui a voté pour qui)" },
+                        { key: "showVoteCounts", label: "Montrer les compteurs de votes pendant le vote" },
+                        { key: "showAllTracksEnd", label: "Montrer toutes les musiques à la fin" },
+                      ]
+                  ).map(({ key, label }) => (
                     <div key={key} className="flex items-center justify-between gap-3">
                       <span className="text-xs text-gray-300">{label}</span>
                       <Toggle
@@ -282,7 +290,7 @@ export default function Lobby() {
         </div>
 
         {/* ── Rôles ── */}
-        <div className="order-3 flex flex-col gap-3">
+        <div className={`order-3 flex flex-col gap-3 ${s.gameMode === "prompt" ? "opacity-30 pointer-events-none" : ""}`}>
           <h2 className="text-xs font-medium text-gray-400 uppercase tracking-widest">Rôles</h2>
           <div className="rounded-2xl p-4 flex flex-col gap-4" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
             {ROLES.map(({ key, Icon, iconClass, label, desc }) => {
