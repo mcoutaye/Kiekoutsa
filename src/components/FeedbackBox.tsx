@@ -10,6 +10,7 @@ export default function FeedbackBox() {
   const [type, setType] = useState<FeedbackType | null>(null);
   const [message, setMessage] = useState("");
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
@@ -28,6 +29,7 @@ export default function FeedbackBox() {
     setType(null);
     setMessage("");
     setName("");
+    setEmail("");
     setSent(false);
   };
 
@@ -38,7 +40,7 @@ export default function FeedbackBox() {
       await fetch("/api/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, message, name }),
+        body: JSON.stringify({ type, message, name, email }),
       });
       setSent(true);
     } finally {
@@ -107,6 +109,13 @@ export default function FeedbackBox() {
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="Ton pseudo (optionnel)"
+                      className="w-full px-3 py-2.5 rounded-xl text-sm text-white placeholder-gray-600 outline-none"
+                      style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
+                    />
+                    <input
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="Ton email (optionnel, pour réponse)"
                       className="w-full px-3 py-2.5 rounded-xl text-sm text-white placeholder-gray-600 outline-none"
                       style={{ background: "var(--bg)", border: "1px solid var(--border)" }}
                     />

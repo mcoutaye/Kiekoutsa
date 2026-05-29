@@ -4,7 +4,7 @@ import { Resend } from "resend";
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: NextRequest) {
-  const { type, message, name } = await req.json();
+  const { type, message, name, email } = await req.json();
 
   if (!message?.trim()) {
     return NextResponse.json({ error: "Message vide" }, { status: 400 });
@@ -16,12 +16,13 @@ export async function POST(req: NextRequest) {
 
   const label = type === "idea" ? "Idée" : "Retour";
   const from = name?.trim() || "Anonyme";
+  const emailLine = email?.trim() ? `Email : ${email.trim()}\n` : "";
 
   await resend.emails.send({
     from: "Kiekoutsa <onboarding@resend.dev>",
     to: "mathis.coutaye@epitech.eu",
     subject: `[La Boite] ${label} de ${from}`,
-    text: `Type : ${label}\nDe : ${from}\n\n${message}`,
+    text: `${emailLine}Type : ${label}\nDe : ${from}\n\n${message}`,
   });
 
   return NextResponse.json({ ok: true });
