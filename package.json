@@ -1,6 +1,6 @@
 {
   "name": "kiekoutsa",
-  "version": "1.034",
+  "version": "1.035",
   "private": true,
   "scripts": {
     "dev": "next dev",
