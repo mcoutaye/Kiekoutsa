@@ -39,13 +39,15 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fr">
-      <body>
-        <Script src="https://www.googletagmanager.com/gtag/js?id=G-BY75TJ0J02" strategy="afterInteractive" />
-        <Script
+      <head>
+        <script
+          async
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6838611624464749"
-          strategy="afterInteractive"
           crossOrigin="anonymous"
         />
+      </head>
+      <body>
+        <Script src="https://www.googletagmanager.com/gtag/js?id=G-BY75TJ0J02" strategy="afterInteractive" />
         <Script id="ga" strategy="afterInteractive">{`
           window.dataLayer = window.dataLayer || [];
           function gtag(){dataLayer.push(arguments);}
